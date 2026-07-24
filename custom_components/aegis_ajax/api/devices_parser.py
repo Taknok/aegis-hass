@@ -330,6 +330,10 @@ def _parse_statuses(statuses: Any) -> dict[str, Any]:  # noqa: ANN401
         elif which == "vibration_detected":
             result["vibration"] = True
         elif which == "tamper":
+            # Defensive only: no vendored proto revision (v0.3.0 → today) has a
+            # plain `tamper` case in the status oneof — the real case-tampering
+            # signals are the granular ones below (#339). Kept in case Ajax
+            # ever adds it.
             result["tamper"] = True
         elif which == "temperature":
             result["temperature"] = status.temperature.value
@@ -386,7 +390,14 @@ def _parse_statuses(statuses: Any) -> dict[str, Any]:  # noqa: ANN401
         elif which == "delay_when_leaving":
             result["delay_when_leaving"] = True
         elif which == "lid_opened":
+            # Granular case-tampering signal. Also folded into the shared
+            # `tamper` key: the per-device tamper sensor of ~40 families binds
+            # to `tamper`, which no proto revision ever emitted as its own
+            # oneof case — without the fold that sensor can never turn on
+            # (#339). The granular key stays for profiles that surface it
+            # individually (hubs).
             result["lid_opened"] = True
+            result["tamper"] = True
         elif which == "nfc":
             result["nfc_enabled"] = (
                 bool(status.nfc.enabled) if hasattr(status.nfc, "enabled") else True
@@ -408,11 +419,17 @@ def _parse_statuses(statuses: Any) -> dict[str, Any]:  # noqa: ANN401
                     int(sub.type), "unspecified"
                 )
         elif which == "case_drilling_detected":
+            # Case-tampering signal — folded into `tamper` like `lid_opened`
+            # (#339).
             result["case_drilling"] = True
+            result["tamper"] = True
         elif which == "anti_masking_alert":
             result["anti_masking"] = True
         elif which == "smart_bracket_unlocked":
+            # Pulled off the SmartBracket mounting plate — the most common
+            # physical tamper (confirmed live, #339). Folded into `tamper`.
             result["smart_bracket_unlocked"] = True
+            result["tamper"] = True
         elif which == "malfunction":
             result["malfunction"] = True
         elif which == "relay_stuck":
