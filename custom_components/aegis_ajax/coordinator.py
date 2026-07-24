@@ -105,6 +105,19 @@ _STATUS_KEY_MAP: dict[str, str] = {
     "lock_control_status": "smart_lock_state",
 }
 
+# Status oneof cases that mean the device's case/mounting is being tampered
+# with. The per-device tamper binary_sensor binds to the shared `tamper` key,
+# which is NOT a real oneof case in any vendored proto revision — these
+# granular signals are what the wire actually carries, so the delta handler
+# mirrors them onto `tamper` (#339). Values are the internal status keys the
+# same signals write through `_STATUS_KEY_MAP`, used to decide whether any
+# other tamper source is still active before clearing on a REMOVE.
+_TAMPER_SOURCE_KEYS: dict[str, str] = {
+    "lid_opened": "lid_opened",
+    "smart_bracket_unlocked": "smart_bracket_unlocked",
+    "case_drilling_detected": "case_drilling",
+}
+
 # Mirror of `lock.LOCK_DEVICE_TYPES` (kept local to avoid a circular import
 # with the lock platform, which imports the coordinator). Used only by the
 # one-shot #206 Bug-B SmartLock id probe.
@@ -1591,6 +1604,17 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 new_statuses["wire_input_alarm_type"] = data["alarm_type"]
         else:  # ADD (1) or UPDATE (2)
             new_statuses[key] = True
+
+        # Case-tampering signals also drive the shared `tamper` key the
+        # per-device tamper sensor binds to (#339). On REMOVE, only clear it
+        # once no other tamper source remains active (lid could still be open
+        # while the bracket delta clears, etc.).
+        if status_name in _TAMPER_SOURCE_KEYS:
+            if op == 3:
+                if not any(new_statuses.get(k) for k in _TAMPER_SOURCE_KEYS.values()):
+                    new_statuses.pop("tamper", None)
+            else:
+                new_statuses["tamper"] = True
 
         updated = DeviceModel(
             id=device.id,

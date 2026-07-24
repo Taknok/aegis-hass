@@ -967,6 +967,58 @@ class TestStreamHandlers:
 
         assert coordinator.devices["d1"].statuses.get("high_temperature") is True
 
+    def test_handle_status_update_lid_opened_folds_into_tamper(self) -> None:
+        # #339: granular case-tampering deltas must drive the shared `tamper`
+        # key the per-device tamper sensor binds to.
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "lid_opened", {"op": 1})
+
+        statuses = coordinator.devices["d1"].statuses
+        assert statuses.get("lid_opened") is True
+        assert statuses.get("tamper") is True
+
+    def test_handle_status_update_smart_bracket_folds_into_tamper(self) -> None:
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "smart_bracket_unlocked", {"op": 1})
+
+        assert coordinator.devices["d1"].statuses.get("tamper") is True
+
+    def test_handle_status_update_tamper_clears_on_remove(self) -> None:
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "lid_opened", {"op": 1})
+        coordinator._handle_status_update("d1", "lid_opened", {"op": 3})
+
+        statuses = coordinator.devices["d1"].statuses
+        assert "lid_opened" not in statuses
+        assert "tamper" not in statuses
+
+    def test_handle_status_update_tamper_survives_remove_while_other_source_active(self) -> None:
+        # Lid still open while the bracket delta clears → tamper must hold.
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "lid_opened", {"op": 1})
+        coordinator._handle_status_update("d1", "smart_bracket_unlocked", {"op": 1})
+        coordinator._handle_status_update("d1", "smart_bracket_unlocked", {"op": 3})
+
+        statuses = coordinator.devices["d1"].statuses
+        assert statuses.get("tamper") is True
+        assert "smart_bracket_unlocked" not in statuses
+
+    def test_handle_status_update_door_opened_does_not_set_tamper(self) -> None:
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "door_opened", {"op": 1})
+
+        assert "tamper" not in coordinator.devices["d1"].statuses
+
     def test_handle_status_update_temperature_preserves_numeric_value(self) -> None:
         coordinator = self._make_coordinator_with_stream()
         coordinator.devices["d1"] = _make_device("d1")

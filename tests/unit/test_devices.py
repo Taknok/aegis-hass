@@ -981,10 +981,48 @@ class TestStatusParser:
         assert result.get("leak_detected") is True
 
     def test_tamper_status(self) -> None:
+        # NOTE: the current proto has NO plain `tamper` oneof case — this
+        # exercises the defensive forward-compat branch only, which is why it
+        # must stay a MagicMock (#339). The real case-tampering signals are
+        # the granular ones covered by the real-proto tests below.
         status = MagicMock()
         status.WhichOneof.return_value = "tamper"
         result = DevicesApi._parse_statuses([status])
         assert result.get("tamper") is True
+
+    def test_lid_opened_real_proto_folds_into_tamper(self) -> None:
+        # #339: the tamper binary_sensor binds to the shared `tamper` key,
+        # which the wire never carries as its own case — the granular signals
+        # must fold into it or the sensor can never turn on.
+        lds = _LDS()
+        status = lds(lid_opened=lds.Simple())
+        result = DevicesApi._parse_statuses([status])
+        assert result.get("lid_opened") is True
+        assert result.get("tamper") is True
+
+    def test_smart_bracket_unlocked_real_proto_folds_into_tamper(self) -> None:
+        # The most common physical tamper: device pulled off its SmartBracket
+        # (confirmed live on a Door Protect, #339).
+        lds = _LDS()
+        status = lds(smart_bracket_unlocked=lds.Simple())
+        result = DevicesApi._parse_statuses([status])
+        assert result.get("smart_bracket_unlocked") is True
+        assert result.get("tamper") is True
+
+    def test_case_drilling_real_proto_folds_into_tamper(self) -> None:
+        lds = _LDS()
+        status = lds(case_drilling_detected=lds.Simple())
+        result = DevicesApi._parse_statuses([status])
+        assert result.get("case_drilling") is True
+        assert result.get("tamper") is True
+
+    def test_door_opened_real_proto_does_not_set_tamper(self) -> None:
+        # Negative control for the fold: a plain opening must not flag tamper.
+        lds = _LDS()
+        status = lds(door_opened=lds.Simple())
+        result = DevicesApi._parse_statuses([status])
+        assert result.get("door_opened") is True
+        assert "tamper" not in result
 
     def test_high_temperature(self) -> None:
         status = MagicMock()
