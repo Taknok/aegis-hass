@@ -2130,6 +2130,90 @@ class TestHubFirmwareRefresh:
         coordinator._hub_object_api.get_device_firmware_updates.assert_awaited_once_with("hub-1")
 
 
+class TestHtsTamperCandidateProbe:
+    """Read-only DEBUG probe for the HTS case-tamper candidate keys (#339).
+
+    A hardware capture on a Hub Plus showed per-device kv keys `0x04` and
+    `0x0f` flipping `00` → `01` in lockstep with physically detaching a
+    device from its SmartBracket, and back on re-attach — on a hub where
+    the gRPC status snapshot carried no tamper at all. Which key is the lid
+    and which the bracket is unconfirmed, and we only have one hub's data,
+    so this logs the values without acting on them: enough for any reporter
+    on DEBUG to confirm the semantics on their own hardware before the
+    signal is wired to the tamper sensor.
+    """
+
+    def _make_device(self, device_type: str = "motion_protect_curtain") -> Device:
+        return Device(
+            id="003AE89B",
+            hub_id="hub-1",
+            name="Curtain",
+            device_type=device_type,
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+
+    def test_both_candidate_keys_are_logged_with_their_values(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01", 0x0F: b"\x01"})
+
+        assert "HTS tamper probe" in caplog.text
+        assert "0x04" in caplog.text
+        assert "0x0F" in caplog.text
+        assert "motion_protect_curtain" in caplog.text
+
+    def test_probe_runs_for_a_temperature_family_device(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The HTS temperature merge returns early for its gated families, so
+        # the probe has to run before it — otherwise a Curtain Outdoor or a
+        # siren would never report its candidate keys.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device(
+            device_type="motion_protect_curtain_outdoor_plus"
+        )
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv(
+                "002B1A51", "003AE89B", {0x02: b"\x18", 0x04: b"\x00", 0x0F: b"\x00"}
+            )
+
+        assert "HTS tamper probe" in caplog.text
+
+    def test_nothing_logged_when_neither_key_is_present(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x42: b"\x00\x28"})
+
+        assert "HTS tamper probe" not in caplog.text
+
+    def test_probe_does_not_change_any_state(self) -> None:
+        # Read-only until the semantics are confirmed on more than one hub.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01", 0x0F: b"\x01"})
+
+        assert coordinator.devices["003AE89B"].statuses == {}
+        coordinator.async_set_updated_data.assert_not_called()
+
+
 class TestOnHtsDeviceKv:
     """Coordinator translates HTS per-device kv into DeviceReadings."""
 

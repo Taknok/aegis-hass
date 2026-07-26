@@ -118,6 +118,18 @@ _TAMPER_SOURCE_KEYS: dict[str, str] = {
     "case_drilling_detected": "case_drilling",
 }
 
+# HTS per-device kv keys that a hardware capture tied to physical case
+# tampering (#339): on a Hub Plus, `0x04` and `0x0f` both flipped `00` → `01`
+# when a MotionProtect Curtain was pulled off its SmartBracket and back on
+# re-attach, across two runs — on a hub whose gRPC status snapshot carried no
+# tamper signal at all, which is why that hub's tamper sensor stays off even
+# after the #340 fold. Which key is the lid and which the bracket is NOT
+# established, and one hub is not enough to wire a user-visible alarm signal
+# to: a key that means something else on another firmware would raise phantom
+# tampers. So this stays read-only for now — the probe below logs the values
+# so a reporter on DEBUG can confirm the semantics on their own hardware.
+_HTS_TAMPER_CANDIDATE_KEYS: tuple[int, ...] = (0x04, 0x0F)
+
 # Mirror of `lock.LOCK_DEVICE_TYPES` (kept local to avoid a circular import
 # with the lock platform, which imports the coordinator). Used only by the
 # one-shot #206 Bug-B SmartLock id probe.
@@ -1017,6 +1029,9 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # markers) is ignored. See api/hts/keyfobs.py.
             self._handle_keyfob_kv(hub_id, device_id_hex, kv)
             return
+        # Case-tamper candidate keys (#339) — read-only probe, logged before
+        # anything that can return early so every device family reports them.
+        self._log_hts_tamper_candidates(device_id_hex, device, kv)
         # Internal temperature via HTS 0x02 (#229), for device families with no
         # gRPC temperature source (Curtain Outdoor Plus/Base). Additive: only
         # fills when the device doesn't already carry a temperature, so devices
@@ -1083,6 +1098,30 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             self.request_security_snapshot_refresh()
         return True
+
+    def _log_hts_tamper_candidates(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """DEBUG-log the HTS case-tamper candidate keys for one device (#339).
+
+        Read-only by design — see `_HTS_TAMPER_CANDIDATE_KEYS`. Logging the
+        current `tamper` status alongside the raw bytes is what makes a
+        reporter's capture conclusive: on a hub that carries the signal only
+        over HTS, the candidate keys flip while `tamper` stays `None`.
+
+        Silent when the row carries neither key, so devices and firmwares
+        that don't report them add no log noise.
+        """
+        present = {f"0x{key:02X}": kv[key].hex() for key in _HTS_TAMPER_CANDIDATE_KEYS if key in kv}
+        if not present:
+            return
+        _LOGGER.debug(
+            "HTS tamper probe: device=%s type=%s candidates=%s tamper_status=%s",
+            device_id_hex,
+            device.device_type,
+            present,
+            device.statuses.get("tamper"),
+        )
 
     def _maybe_apply_hts_device_temperature(
         self, device_id_hex: str, device: Device, kv: dict[int, bytes]
