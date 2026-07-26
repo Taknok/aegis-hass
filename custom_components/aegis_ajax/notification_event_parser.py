@@ -57,6 +57,21 @@ _CONTENT_TAG_MAPS: dict[str, dict[str, str]] = {
     "smart_lock_notification_content": SMARTLOCK_EVENT_TAG_MAP,
 }
 
+# Content cases that carry a qualifier of a vocabulary this integration
+# maps nothing from (`CompanyEventQualifier`, `AccountingEventQualifier`,
+# `BlankEventQualifier`). They are still authoritative: a recognised
+# content type means no scan, because scanning a company or accounting
+# message resolves its bytes against the space vocabulary and invents an
+# arm/disarm. `tests/unit/test_event_tag_maps.py` asserts that every case
+# the proto defines appears here or in `_CONTENT_TAG_MAPS`.
+_UNMAPPED_CONTENT_CASES = frozenset(
+    {
+        "company_notification_content",
+        "accounting_notification_content",
+        "blank_notification_content",
+    }
+)
+
 # Bounds for the best-effort wire walk (fallback path only). Depth covers
 # the deepest real nesting (dispatch → notification → content → typed
 # content → qualifier → tag) with room to spare; the candidate cap keeps a
@@ -148,10 +163,25 @@ def _resolve_event_from_dispatch(
     if not notification.HasField("content"):
         return False, None
     content_case = notification.content.WhichOneof("content")
-    tag_map = _CONTENT_TAG_MAPS.get(content_case) if content_case else None
-    if tag_map is None:
-        # `company` / `accounting` / `blank` contents carry no qualifier.
+    if not content_case:
         return False, None
+    tag_map = _CONTENT_TAG_MAPS.get(content_case)
+    if tag_map is None:
+        if content_case not in _UNMAPPED_CONTENT_CASES:
+            # A content type newer than the vendored protos know about.
+            # WARNING because it means real events may be going unreported
+            # and the protos need a refresh — but still no scan: resolving
+            # an unknown vocabulary's bytes against the space vocabulary
+            # is how phantom arm/disarm events got invented.
+            _LOGGER.warning(
+                "Push carries unrecognised notification content %r; no event reported. "
+                "Please open an issue — the integration's protocol definitions likely "
+                "need updating.",
+                content_case,
+            )
+        else:
+            _LOGGER.debug("Push content %s is not mapped to HA events", content_case)
+        return True, None
     typed_content = getattr(notification.content, content_case)
     if not typed_content.HasField("qualifier"):
         _LOGGER.debug("Push %s carries no qualifier", content_case)

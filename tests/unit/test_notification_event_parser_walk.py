@@ -21,9 +21,17 @@ walk at all.
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.event import (
     transition_pb2,
+)
+from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.event.company import (
+    qualifier_pb2 as company_qualifier_pb2,
+)
+from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.event.company import (
+    tag_pb2 as company_tag_pb2,
 )
 from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.event.hub import (
     qualifier_pb2 as hub_qualifier_pb2,
@@ -41,6 +49,9 @@ from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.notifica
     content_pb2,
     notification_pb2,
     space_pb2,
+)
+from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.notification.company import (  # noqa: E501
+    content_pb2 as company_content_pb2,
 )
 from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.notification.hub import (
     content_pb2 as hub_content_pb2,
@@ -62,6 +73,8 @@ from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.service.push_notifica
 from custom_components.aegis_ajax.notification_event_parser import (
     _extract_event_with_compiled_protos,
     _find_embedded_messages,
+    _resolve_event_by_scanning,
+    _resolve_event_from_dispatch,
 )
 
 # A 64-char hex notification id, the shape real pushes carry.
@@ -299,6 +312,77 @@ class TestQualifierTypeIsTakenFromTheContent:
 
         assert result is not None
         assert result[0] == "tamper"
+
+
+class TestRealCapturedPush:
+    """The captured payload the rest of the suite replays (#80 dedupe tests).
+
+    Imported rather than copied so both suites always exercise the same
+    bytes. It is a photo-on-demand notification from a MotionCam, whose
+    hub tag (`photo_on_demand_with_name`) this integration maps to no HA
+    event.
+    """
+
+    @staticmethod
+    def _raw() -> bytes:
+        from tests.unit.test_notification import _REAL_PUSH_ENCODED_DATA  # noqa: PLC0415
+
+        return base64.b64decode(_REAL_PUSH_ENCODED_DATA)
+
+    def test_real_push_decodes_as_a_dispatch_notification(self) -> None:
+        # Guards the assumption the whole structured path rests on: real
+        # FCM payloads are `PushNotificationDispatchEvent` messages with a
+        # typed content, so the fallback scan never runs for them.
+        recognised, _ = _resolve_event_from_dispatch(self._raw())
+
+        assert recognised is True
+
+    def test_photo_notification_does_not_fire_a_phantom_night_arm(self) -> None:
+        # The candidate scan reported this photo notification as
+        # `arm_night` / `space_night_mode_on`, which also applied a
+        # NIGHT_MODE security state to the panel.
+        assert _resolve_event_by_scanning(self._raw()) == (
+            "arm_night",
+            {"raw_tag": "space_night_mode_on"},
+        ), "fixture no longer reproduces the phantom event this test guards against"
+
+        assert _extract_event_with_compiled_protos(self._raw()) is None
+
+
+class TestUnmappedContentIsNotScanned:
+    """A recognised content type is authoritative even when unmapped.
+
+    `company` / `accounting` / `blank` contents do carry a qualifier — of
+    a vocabulary this integration maps nothing from. Falling back to the
+    candidate scan for them would resolve those bytes against the *space*
+    vocabulary and invent an arm/disarm, which is the whole failure this
+    change exists to remove.
+    """
+
+    def test_company_content_yields_no_event_instead_of_a_scanned_one(self) -> None:
+        # Field 2 of `CompanyEventTag` (`installation_company_removed`)
+        # occupies the same slot as `space_disarmed`, so the scan would
+        # report a `disarm` for a company message.
+        qualifier = company_qualifier_pb2.CompanyEventQualifier(
+            tag=company_tag_pb2.CompanyEventTag(
+                installation_company_removed=company_tag_pb2.InstallationCompanyRemoved()
+            ),
+            transition=transition_pb2.EventTransition(
+                impulse=transition_pb2.EventTransition.Impulse()
+            ),
+        )
+        notification = notification_pb2.Notification(
+            id=_NOTIFICATION_ID,
+            space=space_pb2.NotificationSpace(id=_SPACE_ID, name="Casa"),
+            content=content_pb2.NotificationContent(
+                company_notification_content=company_content_pb2.CompanyNotificationContent(
+                    qualifier=qualifier
+                )
+            ),
+        )
+        raw = event_pb2.PushNotificationDispatchEvent(notification=notification).SerializeToString()
+
+        assert _extract_event_with_compiled_protos(raw) is None
 
 
 class TestWireFormatWalk:
