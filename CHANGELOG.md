@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.15.0] - unreleased
+## [1.15.0] - 2026-07-26
+
+Push security events are decoded correctly, device tamper sensors work for the first time, and sirens become configurable from Home Assistant. Consolidates the 1.15.0-beta series.
 
 ### Added
 - **StreetSiren and HomeSiren settings are now adjustable from Home Assistant (#310).** Each siren gets two config entities: a **Siren volume** select (Very loud / Loud / Quiet / Disabled) and an **Alarm duration** number (seconds). Both are read from — and written back to — the same settings the Ajax app exposes, using the hub's per-device update path. Changing a value requires an account with device-edit permission (a limited account gets a clear error). The current values are read from the rich per-device snapshot on the same throttled timer as the internal temperature, so they may take a moment to populate after startup.
@@ -19,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Siren volume/duration entities now confirm the new value within seconds of a change (#310).** After a successful write the values were only re-read on the shared 900 s snapshot timer, so the entity kept showing the previous value for up to ~15 minutes — indistinguishable in the UI from a rejected write. A successful write now schedules a targeted per-device settings re-read (single-flight per device) so the entity reflects the actual hub value shortly after. It remains a read-back rather than an optimistic update, so an accept-but-inert hub response would still surface as the value snapping back rather than being masked. Thanks to @wip3out3r for the 2×StreetSiren hardware validation that surfaced this.
 - **Event-entity blueprints no longer fire a phantom notification on integration reload or HA restart.** The `security_event_notification`, `tamper_alert` and `intrusion_alarm_capture` blueprints triggered on any state change of the event entity; when the entity is restored (options change, integration reload, HA restart) it re-delivers its last event with a fresh `last_changed`, which slipped past the recency condition and re-sent the last notification (or re-captured photos). The state triggers now carry the same `not_from: unavailable/unknown` guard the other blueprints got in 1.11.4. Re-import the blueprint (or re-copy the file) and reload automations to pick up the fix.
 - **Hub firmware update entity now reports download progress.** The `PROGRESS` feature flag was missing, so Home Assistant silently ignored the entity's in-progress signal while the hub was downloading a queued firmware update.
+
+### Documentation
+- README updated for this release: the siren volume / alarm duration entities, the per-device firmware update entities and the persistent-notifications option are now listed under Features and in the Supported Devices table; the data-source table records that case tampering is dual-sourced (device stream on some hubs, status stream on others) and that per-device internal temperature and keyfob activity ride the status stream; the settings roadmap item is marked as partially shipped.
 
 ## [1.14.0] - 2026-07-18
 

@@ -34,7 +34,10 @@ Ajax Systems provides co-branded versions of their mobile app to security compan
 - **Locks**: Ajax SmartLock and LockBridge (Yale) — lock and unlock. Hub-attached Jeweller locks (e.g. installer-added Yale modules) are commanded over the generic device on/off path. Unlatch (`lock.open`) isn't exposed: it requires Ajax's cloud SmartLock service, which the hub-attached locks seen so far aren't registered with — the Ajax app can't unlatch them either
 - **Hub Chime switch**: a per-hub `Chime` switch toggles the hub-wide chime — the tone the hub plays when a monitored door/window opens while disarmed (the Ajax app's bottom-left toggle). Only created for hubs that expose the feature, and requires the account's chime-edit permission. Changes made from the Ajax app are reflected in Home Assistant immediately.
 - **Valves**: Ajax WaterStop and WaterStop Fibra surface as native `valve.*` entities reflecting `WaterStopChannel.state` (open / closed), `is_transitioning`, and a `stuck` attribute pulled from the channel-level `MALFUNCTION_IS_STUCK`. **Open and close are supported** — the valve can be controlled from Home Assistant and automations
+- **Siren settings**: HomeSiren / StreetSiren devices expose two config entities — a **Siren volume** select (Very loud / Loud / Quiet / Disabled) and an **Alarm duration** number (seconds) — read from and written back to the same settings the Ajax app shows. Writing requires an account with device-edit permission; a successful write triggers a targeted re-read so the entity confirms the hub's actual value within seconds
 - **Hub firmware update** (read-only): each hub exposes an `update.<hub>_firmware` entity that shows whether Ajax has queued a firmware update for the hub, with download progress when the cloud is pushing bytes. No install button is exposed on purpose — firmware updates remain Ajax-scheduled and the entity is informational. Click the entity for a short explainer of what "Up-to-date" actually means here.
+- **Per-device firmware update** (read-only): each non-hub device gets an `update.<device>_firmware` counterpart sourced from the same read-only snapshot, surfacing the queued target version, download progress and a security-critical flag. **Disabled by default** (a typical install has 10-30 devices) — enable the ones you want to watch
+- **Persistent notifications** (optional): an option that surfaces selected security events as Home Assistant persistent notifications that stay visible until dismissed, as a built-in alternative to wiring your own `persistent_notification.create` automation. The event set is configurable and defaults to real incidents (alarm, panic, tamper, fire, CO, flood, glass break). Off by default; requires FCM push
 - **Cameras**: MotionCam Photo on Demand — capture photos and view them in HA (PhOD models only)
 - **Photo Storage**: Captured photos saved to `/media/ajax_photos/` with timestamp overlay, configurable retention
 - **Media Browser**: Browse captured photos per device via HA Media Browser
@@ -199,7 +202,7 @@ You can type any custom label during setup if yours is not listed.
 | Doorbells | Wireless DoorBell (standalone Jeweller ring button), MotionCam Video Doorbell, SmartLock / LockBridge variants with integrated ring button | `doorbell_pressed` on the hub's security event entity, plus a **per-device `event` entity** (`device_class: doorbell`) that emits Home Assistant's canonical `ring` event; a doorbell motion push also flips the doorbell's `motion_detected` on (30 s auto-off). SmartLock variant exposes lock state on the lock entity. Requires FCM credentials configured. _Note:_ the video doorbell has no photo capture in Home Assistant. For **live view**, if the doorbell is bridged through an Ajax NVR you can reach its stream over ONVIF — see [Video cameras (ONVIF / RTSP)](#video-cameras-onvif--rtsp). |
 | Keypads | Keypad, KeypadPlus, KeypadCombi, KeypadTouchscreen | Battery, tamper, temperature, signal, NFC status |
 | Keyfobs (experimental) | SpaceControl, SpaceControl S | Grouped under a single **Keyfobs** device, with one **Active** binary sensor per keyfob (diagnostic). The active/inactive value is **experimental and not yet confirmed** — see [Keyfobs (experimental)](#keyfobs-experimental). Who armed/disarmed via a keyfob already appears in the logbook regardless |
-| Sirens | HomeSiren, HomeSiren S, HomeSiren Fibra, HomeSiren G3, StreetSiren, StreetSiren S, StreetSiren Plus, StreetSiren Plus Fibra/G3, StreetSiren Fibra, StreetSiren Double Deck (& S / Fibra) | Battery, tamper, signal, internal temperature (HomeSiren / StreetSiren family) |
+| Sirens | HomeSiren, HomeSiren S, HomeSiren Fibra, HomeSiren G3, StreetSiren, StreetSiren S, StreetSiren Plus, StreetSiren Plus Fibra/G3, StreetSiren Fibra, StreetSiren Double Deck (& S / Fibra) | Battery, tamper, signal, internal temperature (HomeSiren / StreetSiren family), siren volume (select) and alarm duration (number) |
 | Range extenders | ReX, ReX 2, ReX 2 Fire | Battery, signal |
 | Wired-Input Modules | MultiTransmitter, MultiTransmitter Fibra, Hub Hybrid wired inputs | Tamper of the module itself; each registered wired sensor appears as its own device with an alert binary sensor and an `alarm_type` attribute (intrusion / fire / glass_break / vibration / …) |
 
@@ -415,10 +418,10 @@ This integration uses three communication channels. Each entity type depends on 
 
 | Protocol | Entities | Transport | Notes |
 |----------|----------|-----------|-------|
-| **gRPC stream** | Door open/close, motion, tamper, connectivity, problem, battery, temperature, signal, alarm panel state, switches, lights | `mobile-gw.prod.ajax.systems:443` | Persistent stream, < 1s latency |
+| **gRPC stream** | Door open/close, motion, tamper, connectivity, problem, battery, temperature, signal, alarm panel state, switches, lights | `mobile-gw.prod.ajax.systems:443` | Persistent stream, < 1s latency. Case tampering is dual-sourced: some hubs report it here, others only over HTS (see below) |
 | **gRPC space snapshot** | CRA connection, CRA company, room metadata | Same server | One-shot `SpaceService/stream` snapshot read at startup / refresh time, then cached between polls |
 | **gRPC request** | Arm/disarm, force arm, photo capture trigger | Same server | On-demand commands |
-| **HTS** | Ethernet (IP, gateway, DNS), Wi-Fi (SSID, signal, IP), cellular (signal, network), mains power, connection type | `hts.prod.ajax.systems:443` | Proprietary binary protocol over TCP+TLS |
+| **HTS** | Ethernet (IP, gateway, DNS), Wi-Fi (SSID, signal, IP), cellular (signal, network), mains power, connection type, per-device internal temperature (sirens, MotionProtect Curtain / Outdoor), case tampering, keyfob activity | `hts.prod.ajax.systems:443` | Proprietary binary protocol over TCP+TLS |
 | **FCM push** | Security events (alarm, arm/disarm, tamper, panic, fire, flood, motion, door_open, etc.), photo URL retrieval | Firebase Cloud Messaging | Requires FCM credentials (configured in Options) |
 
 If a specific group of sensors stops working:
@@ -431,7 +434,7 @@ If a specific group of sensors stops working:
 
 - [x] Video stream support (VideoEdge / NVR) — cameras bridged through an Ajax NVR expose a local ONVIF/RTSP service; the integration surfaces their IP + ports so you can use Home Assistant's native ONVIF integration for live view. See [Video cameras (ONVIF / RTSP)](#video-cameras-onvif--rtsp). Native/proxied streaming and the radio MotionCam Video family (not behind an NVR) are still open
 - [x] Valve platform — bidirectional control. Read-only `valve` entity shipped in `1.3.0`; open / close added in `1.12.0` over the generic device on/off command path
-- [ ] Number/Select platforms for device settings (sensitivity, brightness, alert thresholds) — community input wanted, see #310
+- [x] Number/Select platforms for device settings — siren **volume** and **alarm duration** shipped in `1.15.0` (#310), read and written over the hub's per-device update path. Other settings (detector sensitivity, LED brightness, alert thresholds) are still open and need captures from people running that hardware
 - [x] SpaceControl (keyfob) detection — keyfobs surface as a **Keyfobs** device with an experimental per-keyfob active sensor (`1.10.0`); the active/inactive value still awaits confirmation from a deactivated-keyfob log (#311). (Who armed/disarmed via a keyfob was already attributed in the logbook.)
 
 ## Help Wanted
@@ -442,7 +445,7 @@ Areas where the integration could grow with community input:
 
 - **Video streaming** — cameras behind an Ajax **NVR** already have a live-view path via Home Assistant's native ONVIF integration ([guide](#video-cameras-onvif--rtsp)). Still open: the radio **MotionCam Video** family that isn't bridged through an NVR, and any in-integration (proxied) streaming.
 - **A deactivated SpaceControl keyfob** — keyfobs now appear as a *Keyfobs* device with an experimental per-keyfob **Active** sensor (`1.10.0`), but the active/inactive value is unconfirmed because every keyfob seen so far is active. If yours has one deactivated by your installer/CRA, a diagnostics dump + debug log would let us finalize the indicator — see #311.
-- **Device settings** (sensitivity, brightness, alert thresholds) — see #310.
+- **Device settings beyond sirens** — siren volume and alarm duration are covered since `1.15.0` (#310); detector sensitivity, LED brightness and alert thresholds still need captures from owners of that hardware.
 - **Co-branded apps** the integration doesn't yet recognise in the `App Label` dropdown.
 - **Any new device family** that shows up in the snapshot without entities.
 
