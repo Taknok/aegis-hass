@@ -118,6 +118,25 @@ _TAMPER_SOURCE_KEYS: dict[str, str] = {
     "case_drilling_detected": "case_drilling",
 }
 
+# HTS per-device kv keys that a hardware capture tied to physical case
+# tampering (#339): on a Hub Plus, `0x04` and `0x0f` both flipped `00` → `01`
+# when a MotionProtect Curtain was pulled off its SmartBracket and back on
+# re-attach, across two runs — on a hub whose gRPC status snapshot carried no
+# tamper signal at all, which is why that hub's tamper sensor stays off even
+# after the #340 fold. Which key is the lid and which the bracket is NOT
+# established, and one hub is not enough to wire a user-visible alarm signal
+# to: a key that means something else on another firmware would raise phantom
+# tampers. So this stays read-only for now — the probe below logs the values
+# so a reporter on DEBUG can confirm the semantics on their own hardware.
+_HTS_TAMPER_CANDIDATE_KEYS: tuple[int, ...] = (0x04, 0x0F)
+
+# Marks a `tamper` status as sourced from the HTS status stream rather than the
+# gRPC device stream. The gRPC snapshot on these hubs has no tamper field at
+# all, so a fresh snapshot would silently wipe the status; this lets
+# `_handle_devices_snapshot` carry it forward, and lets the HTS `00` withdraw
+# only what HTS itself raised.
+_HTS_CASE_TAMPER_KEY = "hts_case_tamper"
+
 # Mirror of `lock.LOCK_DEVICE_TYPES` (kept local to avoid a circular import
 # with the lock platform, which imports the coordinator). Used only by the
 # one-shot #206 Bug-B SmartLock id probe.
@@ -1017,6 +1036,10 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # markers) is ignored. See api/hts/keyfobs.py.
             self._handle_keyfob_kv(hub_id, device_id_hex, kv)
             return
+        # Case tampering via HTS 0x04/0x0f (#339), for hubs that carry the
+        # signal only on the status stream. Runs before anything that can
+        # return early so every device family is covered.
+        self._maybe_apply_hts_device_tamper(device_id_hex, device, kv)
         # Internal temperature via HTS 0x02 (#229), for device families with no
         # gRPC temperature source (Curtain Outdoor Plus/Base). Additive: only
         # fills when the device doesn't already carry a temperature, so devices
@@ -1083,6 +1106,61 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             self.request_security_snapshot_refresh()
         return True
+
+    def _maybe_apply_hts_device_tamper(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """Route the HTS case-tamper keys onto the shared `tamper` status (#339).
+
+        Either key reading `01` means tampered; both reading `00` means
+        intact. Any other value is ignored — only `00`/`01` were ever
+        observed, so a different byte means the key carries something else on
+        that firmware, and guessing would raise a phantom tamper alert.
+
+        Clearing mirrors the gRPC delta path: `tamper` only goes away once no
+        granular gRPC source (`lid_opened`, `smart_bracket_unlocked`,
+        `case_drilling`) is active either, so two independent sources can't
+        cancel each other out. `_HTS_CASE_TAMPER_KEY` records that the value
+        came from the status stream, which is what lets
+        `_handle_devices_snapshot` carry it across a gRPC snapshot that has no
+        tamper field to report.
+
+        The DEBUG line is deliberately unconditional on the values: on a hub
+        that carries this signal only over HTS, "candidates flip while the
+        gRPC-sourced statuses stay silent" is exactly the evidence a reporter
+        needs to capture.
+        """
+        from dataclasses import replace as dc_replace  # noqa: PLC0415
+
+        present = {key: kv[key] for key in _HTS_TAMPER_CANDIDATE_KEYS if key in kv}
+        if not present:
+            return
+        _LOGGER.debug(
+            "HTS tamper probe: device=%s type=%s candidates=%s tamper_status=%s",
+            device_id_hex,
+            device.device_type,
+            {f"0x{key:02X}": value.hex() for key, value in present.items()},
+            device.statuses.get("tamper"),
+        )
+
+        states = [value == b"\x01" for value in present.values() if value in (b"\x00", b"\x01")]
+        if not states:
+            return
+        tampered = any(states)
+
+        if tampered:
+            if device.statuses.get(_HTS_CASE_TAMPER_KEY) and device.statuses.get("tamper"):
+                return  # unchanged value re-reported on the routine refresh
+            statuses = {**device.statuses, "tamper": True, _HTS_CASE_TAMPER_KEY: True}
+        else:
+            if not device.statuses.get(_HTS_CASE_TAMPER_KEY):
+                return  # intact, and no HTS-sourced tamper to withdraw
+            statuses = {k: v for k, v in device.statuses.items() if k != _HTS_CASE_TAMPER_KEY}
+            if not any(statuses.get(key) for key in _TAMPER_SOURCE_KEYS.values()):
+                statuses.pop("tamper", None)
+
+        self.devices[device_id_hex] = dc_replace(device, statuses=statuses)
+        self.async_set_updated_data({"spaces": self.spaces, "devices": self.devices})
 
     def _maybe_apply_hts_device_temperature(
         self, device_id_hex: str, device: Device, kv: dict[int, bytes]
@@ -1499,6 +1577,26 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     statuses={
                         **device.statuses,
                         "temperature": existing.statuses["temperature"],
+                    },
+                )
+            # An HTS-sourced case tamper (#339) has no counterpart in this
+            # stream — on the hubs that need it the snapshot carries no tamper
+            # field at all — so a fresh snapshot would drop the sensor back to
+            # off until the next 60 s status refresh. Carry it forward; the HTS
+            # `00` is what withdraws it.
+            if (
+                existing is not None
+                and existing.statuses.get(_HTS_CASE_TAMPER_KEY)
+                and "tamper" not in device.statuses
+            ):
+                from dataclasses import replace as dc_replace  # noqa: PLC0415
+
+                device = dc_replace(
+                    device,
+                    statuses={
+                        **device.statuses,
+                        "tamper": True,
+                        _HTS_CASE_TAMPER_KEY: True,
                     },
                 )
             # Siren settings (#310) likewise come from the per-device snapshot,

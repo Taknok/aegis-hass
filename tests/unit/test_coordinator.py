@@ -2130,6 +2130,180 @@ class TestHubFirmwareRefresh:
         coordinator._hub_object_api.get_device_firmware_updates.assert_awaited_once_with("hub-1")
 
 
+class TestHtsTamperProbeLogging:
+    """DEBUG trace for the HTS case-tamper candidate keys (#339).
+
+    A hardware capture on a Hub Plus showed per-device kv keys `0x04` and
+    `0x0f` flipping `00` → `01` in lockstep with physically detaching a
+    device from its SmartBracket, and back on re-attach — on a hub where
+    the gRPC status snapshot carried no tamper at all. Which key is the lid
+    and which the bracket is unconfirmed, and we only have one hub's data,
+    so this logs the values without acting on them: enough for any reporter
+    on DEBUG to confirm the semantics on their own hardware before the
+    signal is wired to the tamper sensor.
+    """
+
+    def _make_device(self, device_type: str = "motion_protect_curtain") -> Device:
+        return Device(
+            id="003AE89B",
+            hub_id="hub-1",
+            name="Curtain",
+            device_type=device_type,
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+
+    def test_both_candidate_keys_are_logged_with_their_values(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01", 0x0F: b"\x01"})
+
+        assert "HTS tamper probe" in caplog.text
+        assert "0x04" in caplog.text
+        assert "0x0F" in caplog.text
+        assert "motion_protect_curtain" in caplog.text
+
+    def test_probe_runs_for_a_temperature_family_device(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The HTS temperature merge returns early for its gated families, so
+        # the probe has to run before it — otherwise a Curtain Outdoor or a
+        # siren would never report its candidate keys.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device(
+            device_type="motion_protect_curtain_outdoor_plus"
+        )
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv(
+                "002B1A51", "003AE89B", {0x02: b"\x18", 0x04: b"\x00", 0x0F: b"\x00"}
+            )
+
+        assert "HTS tamper probe" in caplog.text
+
+    def test_nothing_logged_when_neither_key_is_present(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x42: b"\x00\x28"})
+
+        assert "HTS tamper probe" not in caplog.text
+
+
+class TestHtsCaseTamperRouting:
+    """HTS `0x04`/`0x0f` drive the shared `tamper` status (#339).
+
+    On hubs that carry case tampering only on the status stream, the gRPC
+    fold shipped in #340 has nothing to fold — the snapshot never mentions
+    it. Evidence base: one Hub Plus where both keys flipped `00` → `01` on a
+    physical detach and back on re-attach (two runs), and a second hub where
+    nine intact devices across four families all read `00`.
+    """
+
+    def _make_device(self, statuses: dict[str, object] | None = None) -> Device:
+        return Device(
+            id="003AE89B",
+            hub_id="hub-1",
+            name="Curtain",
+            device_type="motion_protect_curtain",
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses=statuses if statuses is not None else {},
+            battery=None,
+        )
+
+    @pytest.mark.parametrize("key", [0x04, 0x0F])
+    def test_either_candidate_key_set_raises_tamper(self, key: int) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {key: b"\x01"})
+
+        assert coordinator.devices["003AE89B"].statuses["tamper"] is True
+        coordinator.async_set_updated_data.assert_called_once()
+
+    def test_keys_back_to_zero_clear_tamper(self) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01", 0x0F: b"\x01"})
+        assert coordinator.devices["003AE89B"].statuses["tamper"] is True
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x00", 0x0F: b"\x00"})
+
+        assert "tamper" not in coordinator.devices["003AE89B"].statuses
+
+    def test_zero_does_not_clear_a_tamper_from_the_grpc_path(self) -> None:
+        # The device stream and the status stream are independent sources; a
+        # lid still reported open over gRPC must survive an HTS `00`.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device(
+            statuses={"tamper": True, "lid_opened": True}
+        )
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x00", 0x0F: b"\x00"})
+
+        assert coordinator.devices["003AE89B"].statuses["tamper"] is True
+
+    def test_repeated_tamper_report_does_not_churn_entities(self) -> None:
+        # Every device row repeats on the 60 s status refresh; an unchanged
+        # value must not fire a state update.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01"})
+        coordinator.async_set_updated_data.reset_mock()
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01"})
+
+        coordinator.async_set_updated_data.assert_not_called()
+
+    def test_unexpected_value_is_ignored(self) -> None:
+        # Only `00` and `01` were ever observed. Anything else means the key
+        # carries something different on that firmware — acting on it would
+        # risk a phantom tamper alert.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x07"})
+
+        assert "tamper" not in coordinator.devices["003AE89B"].statuses
+        coordinator.async_set_updated_data.assert_not_called()
+
+    def test_grpc_snapshot_does_not_wipe_an_hts_tamper(self) -> None:
+        # A fresh device snapshot rebuilds `statuses` from the stream, which
+        # on these hubs never carries the tamper — without a carry-forward
+        # the sensor would drop out until the next status refresh.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x04: b"\x01"})
+
+        coordinator._handle_devices_snapshot([self._make_device()])
+
+        assert coordinator.devices["003AE89B"].statuses["tamper"] is True
+
+
 class TestOnHtsDeviceKv:
     """Coordinator translates HTS per-device kv into DeviceReadings."""
 
