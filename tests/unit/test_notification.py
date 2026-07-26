@@ -2448,6 +2448,49 @@ class TestParseAndFireEventThreadSafety:
         listener._hass.loop.call_soon_threadsafe.assert_not_called()
 
 
+class TestUnresolvedPushStillQueriesTheApi:
+    """A push that resolves to no event must still trigger the re-read.
+
+    This is what keeps state correct for everything the event vocabulary
+    doesn't cover: the push is the "something happened" signal and the
+    coordinator refresh is what asks Ajax what it actually was. It has to
+    stay independent of event resolution — the parser reporting nothing
+    (unmapped tag, unmapped content type, undecodable payload) must never
+    also mean "don't look".
+    """
+
+    def _make_listener(self) -> tuple[AjaxNotificationListener, MagicMock, MagicMock]:
+        hass = MagicMock()
+        hass.loop = MagicMock()
+        hass.loop.is_running.return_value = True
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator._space_ids = []
+        listener = AjaxNotificationListener(hass=hass, coordinator=coordinator, **_FCM_KWARGS)
+        return listener, hass, coordinator
+
+    def test_real_photo_push_resolves_no_event_but_refreshes(self) -> None:
+        # The captured payload is a photo-on-demand notification whose hub
+        # tag maps to no HA event (it used to be reported as a phantom
+        # `arm_night`). No event fires; the refresh still does.
+        listener, hass, coordinator = self._make_listener()
+        raw = base64.b64decode(_REAL_PUSH_ENCODED_DATA)
+        assert listener._extract_event_with_compiled_protos(raw) is None
+
+        listener._on_notification({"ENCODED_DATA": _restamp_push(_REAL_PUSH_ENCODED_DATA)}, "pid-1")
+
+        coordinator.fire_push_event.assert_not_called()
+        assert hass.loop.call_soon_threadsafe.call_count == 1
+
+    def test_undecodable_push_still_refreshes(self) -> None:
+        listener, hass, coordinator = self._make_listener()
+
+        listener._on_notification({"ENCODED_DATA": base64.b64encode(b"not protobuf").decode()}, "p")
+
+        coordinator.fire_push_event.assert_not_called()
+        assert hass.loop.call_soon_threadsafe.call_count == 1
+
+
 class TestNotificationDedupe:
     """Issue #80: Ajax dispatches two FCM messages per security transition with
     identical notification_id; the second must not double-fire automations."""

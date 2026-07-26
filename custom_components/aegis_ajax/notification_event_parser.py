@@ -42,6 +42,48 @@ _LOGGER = logging.getLogger("custom_components.aegis_ajax.notification")
 _MAX_GROUP_HEX_ID_LEN = 16
 _HEX_CHARS = frozenset("0123456789abcdefABCDEF")
 
+# `NotificationContent` oneof case → tag map for the qualifier it carries.
+# The content case is the ONLY reliable discriminator between the four
+# qualifier types: `HubEventTag` and `SpaceEventTag` share field numbers,
+# so hub qualifier bytes decode cleanly as an unrelated space event and
+# vice versa (`door_opened` reads as `space_armed`, `tamper_opened` as
+# `space_group_duress_disarmed`, `malfunction` as
+# `space_night_mode_on_with_malfunctions`). Decode order cannot resolve
+# that ambiguity — the wrapper has to.
+_CONTENT_TAG_MAPS: dict[str, dict[str, str]] = {
+    "hub_notification_content": HUB_EVENT_TAG_MAP,
+    "space_notification_content": SPACE_EVENT_TAG_MAP,
+    "video_notification_content": VIDEO_EVENT_TAG_MAP,
+    "smart_lock_notification_content": SMARTLOCK_EVENT_TAG_MAP,
+}
+
+# Content cases that carry a qualifier of a vocabulary this integration
+# maps nothing from (`CompanyEventQualifier`, `AccountingEventQualifier`,
+# `BlankEventQualifier`). They are still authoritative: a recognised
+# content type means no scan, because scanning a company or accounting
+# message resolves its bytes against the space vocabulary and invents an
+# arm/disarm. `tests/unit/test_event_tag_maps.py` asserts that every case
+# the proto defines appears here or in `_CONTENT_TAG_MAPS`.
+_UNMAPPED_CONTENT_CASES = frozenset(
+    {
+        "company_notification_content",
+        "accounting_notification_content",
+        "blank_notification_content",
+    }
+)
+
+# Bounds for the best-effort wire walk (fallback path only). Depth covers
+# the deepest real nesting (dispatch → notification → content → typed
+# content → qualifier → tag) with room to spare; the candidate cap keeps a
+# malformed or adversarial payload from expanding without limit, since
+# string and bytes fields get descended into as well.
+_MAX_WALK_DEPTH = 8
+_MAX_WALK_CANDIDATES = 1024
+# The shortest qualifier that can carry a mapped tag is 4 bytes on the
+# wire (`0a 02 <tag> 00` — a tag-only qualifier with no transition), so
+# anything shorter can neither be a candidate nor contain one.
+_MIN_QUALIFIER_LEN = 4
+
 
 def extract_notification_id(encoded_data: str) -> str | None:
     """Extract notification_id from base64-encoded push notification data."""
@@ -62,6 +104,101 @@ def extract_notification_id(encoded_data: str) -> str | None:
 def _extract_event_with_compiled_protos(raw: bytes) -> tuple[str, dict[str, Any]] | None:
     """Resolve a push payload to an HA `(event_type, data)` pair.
 
+    Real pushes are `PushNotificationDispatchEvent` messages, so the
+    payload is decoded structurally first and the qualifier is read from
+    the `NotificationContent` oneof that actually carries it. That
+    wrapper is what identifies the qualifier's type; guessing the type
+    by trying each one in turn relabels events, because the tag protos
+    share field numbers (see `_CONTENT_TAG_MAPS`).
+
+    Only payloads that don't decode as a dispatch notification fall
+    through to `_resolve_event_by_scanning`, the best-effort candidate
+    scan kept for partial or unrecognised shapes.
+    """
+    recognised, structured = _resolve_event_from_dispatch(raw)
+    if recognised:
+        return structured
+    # Logged at DEBUG because non-event pushes (blank / company /
+    # accounting content) legitimately land here; on a capture it tells us
+    # whether a missing event came from the structured path or the scan.
+    _LOGGER.debug("Push payload is not a typed dispatch notification; scanning candidates")
+    return _resolve_event_by_scanning(raw)
+
+
+def _resolve_event_from_dispatch(
+    raw: bytes,
+) -> tuple[bool, tuple[str, dict[str, Any]] | None]:
+    """Resolve the event from the typed `NotificationContent`, if present.
+
+    Returns `(True, event)` when the payload is a dispatch notification
+    whose content type identifies the qualifier — `event` being `None`
+    if that content carries no mapped tag, since reporting nothing beats
+    reporting a cross-decoded arm/disarm. Returns `(False, None)` when
+    the payload isn't a dispatch notification with a typed content, so
+    the caller falls back to the best-effort scan.
+    """
+    try:
+        from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.service.push_notification_dispatch import (  # noqa: PLC0415, E501
+            event_pb2,
+        )
+    except ImportError:  # pragma: no cover - vendored protos always ship
+        _LOGGER.debug("Push dispatch proto not available")
+        return False, None
+
+    try:
+        dispatch = event_pb2.PushNotificationDispatchEvent()
+        dispatch.ParseFromString(raw)
+    except Exception:
+        return False, None
+
+    push_case = dispatch.WhichOneof("push")
+    if push_case == "notification":
+        notification = dispatch.notification
+    elif push_case == "media_enriched_notification":
+        # Photo-on-demand pushes wrap the same `Notification` message.
+        notification = dispatch.media_enriched_notification.notification
+    else:
+        return False, None
+
+    if not notification.HasField("content"):
+        return False, None
+    content_case = notification.content.WhichOneof("content")
+    if not content_case:
+        return False, None
+    tag_map = _CONTENT_TAG_MAPS.get(content_case)
+    if tag_map is None:
+        if content_case not in _UNMAPPED_CONTENT_CASES:
+            # A content type newer than the vendored protos know about.
+            # WARNING because it means real events may be going unreported
+            # and the protos need a refresh — but still no scan: resolving
+            # an unknown vocabulary's bytes against the space vocabulary
+            # is how phantom arm/disarm events got invented.
+            _LOGGER.warning(
+                "Push carries unrecognised notification content %r; no event reported. "
+                "Please open an issue — the integration's protocol definitions likely "
+                "need updating.",
+                content_case,
+            )
+        else:
+            _LOGGER.debug("Push content %s is not mapped to HA events", content_case)
+        return True, None
+    typed_content = getattr(notification.content, content_case)
+    if not typed_content.HasField("qualifier"):
+        _LOGGER.debug("Push %s carries no qualifier", content_case)
+        return True, None
+    event = _event_from_qualifier(typed_content.qualifier, tag_map)
+    if event is None:
+        _LOGGER.debug(
+            "Push %s tag %s is not mapped to an HA event",
+            content_case,
+            typed_content.qualifier.tag.WhichOneof("event_tag_case"),
+        )
+    return True, event
+
+
+def _resolve_event_by_scanning(raw: bytes) -> tuple[str, dict[str, Any]] | None:
+    """Best-effort resolution for payloads of unrecognised shape.
+
     Walks every embedded protobuf candidate, tries to decode it against
     each of the four event qualifier types (Space / Hub / Video /
     SmartLock), and collects every successful match. The highest-
@@ -78,6 +215,10 @@ def _extract_event_with_compiled_protos(raw: bytes) -> tuple[str, dict[str, Any]
     Tags absent from `TAG_PRIORITY` default to weight 0 so they still
     participate but lose to anything ranked — preserving the previous
     first-match-wins behaviour for the unranked long tail.
+
+    Type ambiguity is unavoidable here: with no content wrapper to read,
+    a candidate that decodes as several qualifier types keeps the legacy
+    Space > Hub > Video > SmartLock precedence.
     """
     from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.event.hub import (  # noqa: PLC0415, E501
         qualifier_pb2 as hub_qualifier_pb2,
@@ -145,6 +286,20 @@ def _resolve_qualifier(
         qualifier.ParseFromString(candidate)
     except Exception:
         return None
+    return _event_from_qualifier(qualifier, tag_map)
+
+
+def _event_from_qualifier(
+    # One of the four generated `*EventQualifier` messages; they share no
+    # base class beyond `Message`, which doesn't expose `tag`/`transition`.
+    qualifier: Any,  # noqa: ANN401
+    tag_map: dict[str, str],
+) -> tuple[str, dict[str, Any]] | None:
+    """Map an already-decoded qualifier message to `(event_type, data)`.
+
+    Returns None when the qualifier carries no tag or a tag absent from
+    `tag_map`.
+    """
     if not qualifier.HasField("tag"):
         return None
     tag_field = qualifier.tag.WhichOneof("event_tag_case")
@@ -158,38 +313,89 @@ def _resolve_qualifier(
     return tag_map[tag_field], data
 
 
+def _read_varint(raw: bytes, i: int) -> tuple[int, int] | None:
+    """Read the varint at `i`, returning `(value, next_index)`.
+
+    Returns None when the varint runs past the end of the buffer.
+    """
+    value = 0
+    shift = 0
+    while i < len(raw):
+        byte = raw[i]
+        value |= (byte & 0x7F) << shift
+        i += 1
+        if not (byte & 0x80):
+            return value, i
+        shift += 7
+        if shift > 63:  # malformed: longer than any legal varint
+            return None
+    return None
+
+
 def _find_embedded_messages(raw: bytes) -> list[bytes]:
     """Extract candidate embedded protobuf messages from raw bytes.
 
-    Scans for length-delimited fields (wire type 2) and extracts their content.
-    Returns candidates from deepest nesting first (most likely to be the qualifier).
+    Walks the protobuf wire format field by field, collecting the
+    contents of every length-delimited field and descending into each
+    one. Consuming each field's payload — varint, 64-bit and 32-bit
+    included — is what keeps the walk aligned: reading a varint's value
+    byte as the next field tag used to derail the scan and step over the
+    event qualifier entirely (#339). Tags are read as varints too, since
+    field numbers above 15 need more than one byte (`tamper_opened` is
+    field 17, tag `8a 01`).
+
+    Candidates are collected regardless of size. The old `4 < length <
+    500` filter dropped both tag-only qualifiers (4 bytes) and, because
+    the recursive descent sat inside the filter, every event inside a
+    wrapper larger than 500 bytes.
     """
     candidates: list[bytes] = []
-    i = 0
-    while i < len(raw) - 2:
-        wire_type = raw[i] & 0x07
-        if wire_type == 2:  # length-delimited
-            # Read varint length
-            j = i + 1
-            length = 0
-            shift = 0
-            while j < len(raw):
-                byte = raw[j]
-                length |= (byte & 0x7F) << shift
-                shift += 7
-                j += 1
-                if not (byte & 0x80):
-                    break
-            if j + length <= len(raw) and 4 < length < 500:
-                candidate = raw[j : j + length]
-                candidates.append(candidate)
-                # Also recurse into the candidate
-                inner = _find_embedded_messages(candidate)
-                candidates.extend(inner)
-            i = j + length if j + length <= len(raw) else i + 1
-        else:
-            i += 1
+    _walk_wire_format(raw, candidates, 0)
     return candidates
+
+
+def _walk_wire_format(raw: bytes, candidates: list[bytes], depth: int) -> None:
+    """Append every length-delimited payload in `raw` to `candidates`."""
+    if depth > _MAX_WALK_DEPTH:
+        return
+    i = 0
+    end = len(raw)
+    while i < end:
+        if len(candidates) >= _MAX_WALK_CANDIDATES:
+            return
+        read = _read_varint(raw, i)
+        if read is None:
+            return
+        tag, i = read
+        wire_type = tag & 0x07
+        if wire_type == 0:  # varint
+            read = _read_varint(raw, i)
+            if read is None:
+                return
+            _, i = read
+        elif wire_type == 1:  # 64-bit
+            i += 8
+        elif wire_type == 5:  # 32-bit
+            i += 4
+        elif wire_type == 2:  # length-delimited
+            read = _read_varint(raw, i)
+            if read is None:
+                return
+            length, i = read
+            if i + length > end:
+                return
+            candidate = raw[i : i + length]
+            i += length
+            if len(candidate) >= _MIN_QUALIFIER_LEN:
+                candidates.append(candidate)
+                _walk_wire_format(candidate, candidates, depth + 1)
+        else:
+            # Wire types 3/4 (deprecated groups) and 6/7 (illegal) don't
+            # appear in Ajax payloads; encountering one means this buffer
+            # isn't protobuf at this offset, so stop rather than guess.
+            return
+        if i > end:
+            return
 
 
 def _extract_source_info(raw: bytes) -> dict[str, Any]:
