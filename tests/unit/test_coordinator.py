@@ -2250,6 +2250,107 @@ class TestHtsTamperProbeLogging:
         assert "HTS tamper probe" not in caplog.text
 
 
+class TestHtsBypassCandidateProbe:
+    """Read-only DEBUG probe for the HTS bypass-configuration keys (#338).
+
+    A hardware log of an app-side *re*activation showed `0xb7` on the device's
+    STATUS_UPDATE row (and `0xb6` on the accompanying SETTINGS_UPDATE row),
+    both `00` once the device was back in protection — and
+    `CommonJewellerPart.bypass_part`, which carries the device's enabled
+    `bypass_mode` list, is field `0xB7` in the gRPC model. If those numbering
+    spaces coincide, the data that would explain an accept-but-inert bypass
+    write is already on a transport we consume. Unproven, so: log it with the
+    device's deactivation state alongside, act on nothing.
+    """
+
+    def _make_device(self, statuses: dict[str, object] | None = None) -> Device:
+        return Device(
+            id="003AE89B",
+            hub_id="hub-1",
+            name="Finestra",
+            device_type="door_protect",
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses=statuses if statuses is not None else {},
+            battery=None,
+        )
+
+    def test_candidate_keys_are_logged_with_the_deactivation_state(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The pairing is the point: a raw byte alone proves nothing, the same
+        # byte next to `deactivated=True` on one device and `False` on another
+        # is what identifies the field.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device(
+            statuses={"temporary_deactivation_whole": True, "deactivated": True}
+        )
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0xB6: b"\x01", 0xB7: b"\x01"})
+
+        assert "HTS bypass probe" in caplog.text
+        assert "0xB6" in caplog.text
+        assert "0xB7" in caplog.text
+        assert "deactivated=True" in caplog.text
+        assert "temporary_deactivation_whole" in caplog.text
+
+    def test_active_device_logs_with_deactivated_false(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0xB7: b"\x00"})
+
+        assert "HTS bypass probe" in caplog.text
+        assert "deactivated=False" in caplog.text
+
+    def test_probe_runs_for_a_temperature_family_device(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Must run before the temperature merge, which returns early for its
+        # gated families — otherwise a siren or Curtain Outdoor never reports.
+        coordinator = _make_coordinator()
+        device = self._make_device()
+        coordinator.devices["003AE89B"] = replace(
+            device, device_type="motion_protect_curtain_outdoor_plus"
+        )
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x02: b"\x18", 0xB7: b"\x00"})
+
+        assert "HTS bypass probe" in caplog.text
+
+    def test_nothing_logged_when_neither_key_is_present(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0x42: b"\x00\x28"})
+
+        assert "HTS bypass probe" not in caplog.text
+
+    def test_probe_does_not_change_any_state(self) -> None:
+        # Read-only: these keys are a hypothesis, and routing a wrong one onto
+        # the bypass switch would misreport whether a sensor is protecting.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator._on_hts_device_kv("002B1A51", "003AE89B", {0xB6: b"\x01", 0xB7: b"\x01"})
+
+        assert coordinator.devices["003AE89B"].statuses == {}
+        coordinator.async_set_updated_data.assert_not_called()
+
+
 class TestHtsCaseTamperRouting:
     """HTS `0x04`/`0x0f` drive the shared `tamper` status (#339).
 
