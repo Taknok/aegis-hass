@@ -3126,6 +3126,13 @@ class TestBypassConfirm:
 
         assert "d1" in caplog.text
         assert "338" in caplog.text
+        assert "had no effect" in caplog.text
+        # The warning must state the symptom and NOT attribute a cause: the
+        # account-permission explanation was disproved on hardware (the same
+        # account deactivates the same device from the Ajax app successfully),
+        # and users paste this line into issues.
+        assert "lacks" not in caplog.text
+        assert "permission" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_confirm_silent_when_the_hub_applied_the_write(self, caplog) -> None:  # noqa: ANN001

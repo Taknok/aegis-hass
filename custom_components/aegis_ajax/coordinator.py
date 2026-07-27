@@ -837,11 +837,19 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return
             actual = is_device_deactivated(current)
             if actual != expected:
+                # Symptom only, deliberately no cause. The obvious guess —
+                # "the account lacks the rights" — was disproved on hardware
+                # (#338): the same account deactivates the very same device
+                # from the Ajax app and it takes effect, so only the command
+                # path is inert. Do not put a diagnosis back in this string
+                # until one is actually established; users paste it into
+                # issues and a wrong cause sends them chasing permissions.
                 _LOGGER.warning(
-                    "Bypass %s for device %s (%s) was accepted by the hub but "
-                    "the device still reads %s — the account most likely lacks "
-                    "the rights for this deactivation mode, so the command was "
-                    "a silent no-op (#338)",
+                    "Bypass %s for device %s (%s) was accepted by the hub, but a "
+                    "read-back still reports the device as %s — the command had no "
+                    "effect. Deactivating the device from the Ajax app does work; "
+                    "why the command path is ignored is still being investigated, "
+                    "see https://github.com/bvis/aegis-hass/issues/338",
                     "enable" if expected else "disable",
                     device_id,
                     device.name,
