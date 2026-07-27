@@ -29,10 +29,14 @@ from custom_components.aegis_ajax.api.hub_object import (
 )
 from custom_components.aegis_ajax.api.media import MediaApi
 from custom_components.aegis_ajax.api.models import Device as DeviceModel
+from custom_components.aegis_ajax.api.models import is_device_deactivated
 from custom_components.aegis_ajax.api.security import SecurityApi
 from custom_components.aegis_ajax.api.session import AuthenticationError
 from custom_components.aegis_ajax.api.spaces import SpacesApi
 from custom_components.aegis_ajax.const import (
+    BYPASS_CONFIRM_DELAY,
+    DEACTIVATED_KEY,
+    DEACTIVATION_STATUS_KEYS,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     HUB_DEVICE_TEMP_REFRESH_INTERVAL,
@@ -266,6 +270,9 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Sirens with a post-write settings confirm read in flight (single-flight
         # per device; see `schedule_siren_settings_confirm`).
         self._siren_confirm_pending: set[str] = set()
+        # Devices with a post-write bypass confirm read in flight (single-flight
+        # per device; see `schedule_bypass_confirm`).
+        self._bypass_confirm_pending: set[str] = set()
         # Independent poll safety-net timer (#178). On active hubs every HTS
         # update reschedules HA's built-in poll timer faster than
         # `poll_interval`, starving the scheduled `_async_update_data`; this
@@ -785,6 +792,63 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.async_set_updated_data({"spaces": self.spaces, "devices": self.devices})
         finally:
             self._siren_confirm_pending.discard(device_id)
+
+    @callback
+    def schedule_bypass_confirm(self, device_id: str, *, expected: bool) -> None:
+        """Schedule an independent read-back after a bypass write (#338).
+
+        `DeviceCommandBypass` has an accept-but-inert failure mode: the hub
+        answers success and applies nothing when the account can't set the
+        requested deactivation mode. A successful command is therefore not
+        evidence of a state change, and an optimistic entity update would
+        actively lie about whether a sensor is protecting the property. Re-read
+        the device instead and let the switch show whatever the panel really
+        says; on a disagreement, warn so the silent no-op is visible in the log
+        rather than only in the (unchanged) hardware.
+
+        Single-flight per device — a second write while a confirm is pending
+        rides the scheduled read.
+        """
+        if device_id in self._bypass_confirm_pending:
+            return
+        self._bypass_confirm_pending.add(device_id)
+        self.hass.async_create_task(self._async_confirm_bypass(device_id, expected=expected))
+
+    async def _async_confirm_bypass(self, device_id: str, *, expected: bool) -> None:
+        try:
+            await asyncio.sleep(BYPASS_CONFIRM_DELAY)
+            device = self.devices.get(device_id)
+            if device is None:
+                return
+            space_id = next((s.id for s in self.spaces.values() if s.hub_id == device.hub_id), None)
+            if space_id is None:
+                return
+            try:
+                fresh_devices = await self._devices_api.get_devices_snapshot(space_id)
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug("Bypass confirm read failed for device %s", device_id, exc_info=True)
+                return
+            fresh = next((d for d in fresh_devices if d.id == device_id), None)
+            if fresh is None:
+                return
+            self._handle_devices_snapshot([fresh])
+            current = self.devices.get(device_id)
+            if current is None:
+                return
+            actual = is_device_deactivated(current)
+            if actual != expected:
+                _LOGGER.warning(
+                    "Bypass %s for device %s (%s) was accepted by the hub but "
+                    "the device still reads %s — the account most likely lacks "
+                    "the rights for this deactivation mode, so the command was "
+                    "a silent no-op (#338)",
+                    "enable" if expected else "disable",
+                    device_id,
+                    device.name,
+                    "deactivated" if actual else "active",
+                )
+        finally:
+            self._bypass_confirm_pending.discard(device_id)
 
     def _schedule_poll_safety_refresh(self) -> None:
         """Start the independent poll safety-net timer (#178).
@@ -1713,6 +1777,18 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     new_statuses.pop("tamper", None)
             else:
                 new_statuses["tamper"] = True
+
+        # Same fold for the deactivation statuses (#338): the bypass switch
+        # binds to the shared `DEACTIVATED_KEY`, so a device deactivated from
+        # the Ajax app while HA is running must reach it through this path too
+        # — not only through the next full snapshot. On REMOVE the shared key
+        # only clears once no other deactivation mode is still in force.
+        if status_name in DEACTIVATION_STATUS_KEYS:
+            if op == 3:
+                if not any(new_statuses.get(k) for k in DEACTIVATION_STATUS_KEYS):
+                    new_statuses.pop(DEACTIVATED_KEY, None)
+            else:
+                new_statuses[DEACTIVATED_KEY] = True
 
         updated = DeviceModel(
             id=device.id,

@@ -192,7 +192,10 @@ class TestAjaxBypassSwitch:
     """Per-device bypass (deactivation) switch (#bypass)."""
 
     def _make(
-        self, device_type: str = "door_protect", bypassed: bool = False
+        self,
+        device_type: str = "door_protect",
+        bypassed: bool = False,
+        statuses: dict | None = None,
     ) -> tuple[object, MagicMock]:
         from custom_components.aegis_ajax.switch import AjaxBypassSwitch
 
@@ -202,6 +205,7 @@ class TestAjaxBypassSwitch:
         device.device_type = device_type
         device.bypassed = bypassed
         device.is_online = True
+        device.statuses = statuses if statuses is not None else {}
         coordinator.devices = {"d1": device}
         sw = AjaxBypassSwitch(
             coordinator=coordinator, device_id="d1", hub_id="h1", device_type=device_type
@@ -271,6 +275,89 @@ class TestAjaxBypassSwitch:
         cmd = coordinator.devices_api.send_command.call_args[0][0]
         assert cmd.action == "bypass"
         assert cmd.bypass_enable is False
+
+    # --- #338: the switch must read the panel's real deactivation state -----
+    # A device deactivated from the Ajax app never sets `profile.bypassed`;
+    # the truth arrives as one of the `*_deactivation_*` statuses. Without
+    # this the switch shows `off` (= protected) on a sensor the panel has
+    # disabled — the dangerous half of #338.
+
+    def test_is_on_true_when_temporary_deactivation_whole_present(self) -> None:
+        sw, _ = self._make(bypassed=False, statuses={"temporary_deactivation_whole": True})
+        assert sw.is_on is True
+
+    def test_is_on_true_when_one_time_deactivation_tamper_present(self) -> None:
+        sw, _ = self._make(bypassed=False, statuses={"one_time_deactivation_tamper": True})
+        assert sw.is_on is True
+
+    def test_is_on_true_when_folded_deactivated_key_present(self) -> None:
+        # The parser/delta fold writes the shared key; the switch binds to it.
+        sw, _ = self._make(bypassed=False, statuses={"deactivated": True})
+        assert sw.is_on is True
+
+    def test_is_on_false_when_unrelated_status_present(self) -> None:
+        sw, _ = self._make(bypassed=False, statuses={"door_opened": True})
+        assert sw.is_on is False
+
+    def test_attributes_expose_active_deactivation_kinds(self) -> None:
+        sw, _ = self._make(
+            bypassed=False,
+            statuses={
+                "deactivated": True,
+                "temporary_deactivation_whole": True,
+                "one_time_deactivation_tamper": True,
+                "door_opened": True,
+            },
+        )
+        assert sw.extra_state_attributes == {
+            "deactivation_kinds": [
+                "temporary_deactivation_whole",
+                "one_time_deactivation_tamper",
+            ]
+        }
+
+    def test_attributes_empty_list_when_active(self) -> None:
+        sw, _ = self._make(bypassed=False, statuses={"door_opened": True})
+        assert sw.extra_state_attributes == {"deactivation_kinds": []}
+
+    @pytest.mark.asyncio
+    async def test_turn_on_schedules_confirm_read(self) -> None:
+        # #338 option A: the write can be accepted and silently not applied,
+        # so the entity must be corrected by an independent read-back.
+        sw, coordinator = self._make()
+        coordinator.devices_api.send_command = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+
+        await sw.async_turn_on()
+
+        coordinator.schedule_bypass_confirm.assert_called_once_with("d1", expected=True)
+
+    @pytest.mark.asyncio
+    async def test_turn_off_schedules_confirm_read(self) -> None:
+        sw, coordinator = self._make(bypassed=True)
+        coordinator.devices_api.send_command = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+
+        await sw.async_turn_off()
+
+        coordinator.schedule_bypass_confirm.assert_called_once_with("d1", expected=False)
+
+    @pytest.mark.asyncio
+    async def test_no_confirm_scheduled_when_the_write_fails(self) -> None:
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.aegis_ajax.api.devices import DeviceCommandError
+
+        sw, coordinator = self._make()
+        coordinator.devices_api.send_command = AsyncMock(
+            side_effect=DeviceCommandError("bypass: permission_denied", reason="permission_denied")
+        )
+        coordinator.async_request_refresh = AsyncMock()
+
+        with pytest.raises(HomeAssistantError):
+            await sw.async_turn_on()
+
+        coordinator.schedule_bypass_confirm.assert_not_called()
 
 
 class TestBypassSwitchSetup:

@@ -1024,6 +1024,47 @@ class TestStatusParser:
         assert result.get("door_opened") is True
         assert "tamper" not in result
 
+    # --- #338: deactivation (bypass) statuses --------------------------------
+    # A device deactivated from the Ajax app reports one of these; the
+    # snapshot's `profile.bypassed` flag stays False, so before #338 the
+    # integration showed a panel-disabled sensor as live protection.
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            "temporary_deactivation_whole",
+            "temporary_deactivation_tamper",
+            "one_time_deactivation_whole",
+            "one_time_deactivation_tamper",
+            "temporary_deactivation_alarms",
+            "temporary_deactivation_timer",
+            "temporary_deactivation",
+            "one_time_deactivation",
+        ],
+    )
+    def test_deactivation_real_proto_folds_into_deactivated(self, case: str) -> None:
+        lds = _LDS()
+        status = lds(**{case: lds.Simple()})
+        result = DevicesApi._parse_statuses([status])
+        assert result.get(case) is True
+        assert result.get("deactivated") is True
+
+    def test_door_opened_real_proto_does_not_set_deactivated(self) -> None:
+        # Negative control for the deactivation fold.
+        lds = _LDS()
+        status = lds(door_opened=lds.Simple())
+        result = DevicesApi._parse_statuses([status])
+        assert "deactivated" not in result
+
+    def test_deactivation_tamper_is_not_a_tamper_alarm(self) -> None:
+        # `*_deactivation_tamper` means the tamper protection is DISABLED —
+        # it must never feed the `tamper` key the tamper sensor binds to
+        # (#338 vs the #339/#340 fold in the same function).
+        lds = _LDS()
+        status = lds(temporary_deactivation_tamper=lds.Simple())
+        result = DevicesApi._parse_statuses([status])
+        assert "tamper" not in result
+
     def test_high_temperature(self) -> None:
         status = MagicMock()
         status.WhichOneof.return_value = "high_temperature_detected"

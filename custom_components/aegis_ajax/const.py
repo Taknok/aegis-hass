@@ -327,6 +327,49 @@ SIREN_ALARM_DURATION_STEP = 1
 # fallback if the confirm read still races the write.
 SIREN_SETTINGS_CONFIRM_DELAY = 5.0
 
+# Status oneof cases that mean "this device is deactivated on the panel", i.e.
+# excluded from protection (#338). They are what the wire actually carries —
+# `profile.bypassed` stays False for a device deactivated from the Ajax app,
+# so without reading these HA reported a disabled sensor as live protection.
+#
+# READ THE NAMES BACKWARDS — Ajax's wording is inverted relative to English
+# intuition, and this has been verified against the app's own labels:
+#   * `temporary_*` / "forzata"  = the PERMANENT deactivation (until re-enabled)
+#   * `one_time_*`  / "unica"    = lasts a single arming cycle
+# Do not "fix" this mapping to match the English adjectives.
+#
+# `*_deactivation_tamper` means the device's TAMPER PROTECTION is disabled.
+# It is NOT a tamper alarm and must never feed the shared `tamper` key the
+# tamper binary_sensor binds to (#339/#340).
+#
+# The four `whole`/`tamper` variants are hardware-confirmed (#338, four-mode
+# mapping on a live fixture). The bare and `alarms`/`timer` variants exist in
+# the same oneof but have not been observed on hardware; they are folded the
+# same way because every one of them means "protection is off here", and
+# under-reporting that is the failure mode this fix exists to remove.
+DEACTIVATION_STATUS_KEYS: tuple[str, ...] = (
+    "temporary_deactivation_whole",
+    "temporary_deactivation_tamper",
+    "one_time_deactivation_whole",
+    "one_time_deactivation_tamper",
+    "temporary_deactivation_alarms",
+    "temporary_deactivation_timer",
+    "temporary_deactivation",
+    "one_time_deactivation",
+)
+
+# Shared status key every `DEACTIVATION_STATUS_KEYS` case folds into — the
+# bypass switch binds to it, so the entity reads `on` regardless of which
+# deactivation mode the panel applied or who applied it (#338).
+DEACTIVATED_KEY = "deactivated"
+
+# Settle delay (seconds) before the post-write bypass read-back (#338). The
+# bypass write has a real accept-but-inert failure mode (the hub returns
+# success and does nothing when the account can't apply the requested mode),
+# so a successful command is not evidence of a state change — only an
+# independent read is. Same rationale and cadence as the siren confirm above.
+BYPASS_CONFIRM_DELAY = 5.0
+
 # Opt-out for users who deliberately run without push notifications. When set,
 # the integration does not raise the recurring `fcm_not_configured` Repair card
 # or the WARNING log when the four FCM fields are empty, and clears any card

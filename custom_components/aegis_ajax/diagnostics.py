@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_PASSWORD
 
+from custom_components.aegis_ajax.api.models import (
+    device_deactivation_kinds,
+    is_device_deactivated,
+)
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -105,6 +110,12 @@ async def async_get_config_entry_diagnostics(
                 "online": d.is_online,
                 "malfunctions": d.malfunctions,
                 "bypassed": d.bypassed,
+                # What the bypass switch actually shows (#338). `bypassed` is
+                # only one of the two sources: a device deactivated from the
+                # Ajax app leaves it False and reports `*_deactivation_*`
+                # statuses instead, so both are dumped side by side.
+                "deactivated": is_device_deactivated(d),
+                "deactivation_kinds": device_deactivation_kinds(d),
                 "battery": (
                     {"level": d.battery.level, "low": d.battery.is_low} if d.battery else None
                 ),

@@ -18,6 +18,8 @@ from typing import Any
 
 from custom_components.aegis_ajax.api.models import BatteryInfo, Device
 from custom_components.aegis_ajax.const import (
+    DEACTIVATED_KEY,
+    DEACTIVATION_STATUS_KEYS,
     SIREN_ALARM_DURATION_KEY,
     SIREN_VOLUME_LEVEL_KEY,
     DeviceState,
@@ -458,6 +460,15 @@ def _parse_statuses(statuses: Any) -> dict[str, Any]:  # noqa: ANN401
             result["smart_lock_state"] = _LOCK_CONTROL_STATE_MAP.get(
                 int(status.lock_control_status.state), "unknown"
             )
+        elif which in DEACTIVATION_STATUS_KEYS:
+            # The device is deactivated (bypassed) on the panel — see
+            # `DEACTIVATION_STATUS_KEYS` for the inverted `temporary_` /
+            # `one_time_` naming and why `*_tamper` is deliberately NOT
+            # folded into `tamper`. The granular case is kept so the bypass
+            # switch can surface *which* mode is in force; the shared key is
+            # what the switch's state binds to (#338).
+            result[which] = True
+            result[DEACTIVATED_KEY] = True
     return result
 
 
