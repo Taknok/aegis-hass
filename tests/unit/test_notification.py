@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +14,7 @@ from custom_components.aegis_ajax.notification import (
     AjaxNotificationListener,
     _classify_fcm_failure,
     _validate_fcm_shape,
+    async_probe_fcm_refusal_reason,
 )
 
 # A coherent four-value FCM set whose shapes pass every validator check:
@@ -1365,20 +1367,17 @@ class TestClassifyFcmFailure:
         for forbidden in ("APK", "cobrand", "libnative", "strings.xml"):
             assert forbidden not in msg
 
-    def test_fcm_install_failure_points_at_wrong_aiza_string(self) -> None:
-        # Empirical: this branch fires when Firebase returns 403
-        # API_KEY_ANDROID_APP_BLOCKED. After @alt-BadBatch / @zwagerzaken's
-        # #182 data points, we know the most common cause is the user
-        # picking a non-FCM `AIza...` string from the APK's native lib
-        # (Maps / ML Kit). Surface that explanation so future users
-        # don't go down the paste-truncation rabbit hole.
+    def test_fcm_install_failure_presents_both_causes_without_picking_one(self) -> None:
+        # This branch fires on a Firebase Installations 403, which has TWO
+        # causes needing OPPOSITE fixes — and the library hides which one
+        # (#344). The message used to assert the wrong-`AIza` explanation for
+        # both, sending users who had the right key chasing key extraction.
+        # It must now describe both and defer to the probe's follow-up line.
         msg = _classify_fcm_failure(RuntimeError("Unable to register with fcm"))
-        # Both 403 sub-codes share the same cause (wrong AIza key) and remedy,
-        # so the message names both: ANDROID_APP_BLOCKED (package-restricted
-        # key) and SERVICE_BLOCKED (Maps/other-service key — raven2k24's #194).
         assert "API_KEY_ANDROID_APP_BLOCKED" in msg
         assert "API_KEY_SERVICE_BLOCKED" in msg
-        assert "AIza" in msg  # the wrong-string explanation
+        assert "nothing to do with which key you extracted" in msg
+        assert "next log line" in msg
         assert "Repair card" in msg
 
     def test_gcm_checkin_failure_points_at_network(self) -> None:
@@ -1408,6 +1407,283 @@ class TestClassifyFcmFailure:
         msg = _classify_fcm_failure(RuntimeError())
         assert "FCM registration failed" in msg
         assert "RuntimeError" in msg
+
+
+class TestProbeFcmRefusalReason:
+    """`async_probe_fcm_refusal_reason` reads the reason the library discards.
+
+    `firebase_messaging` collapses `API_KEY_SERVICE_BLOCKED` (wrong key) and
+    `API_KEY_ANDROID_APP_BLOCKED` (right key, restriction rejected our request)
+    into one error string and drops the HTTP body that tells them apart — so
+    every "FCM credentials rejected" report cost a round trip with the reporter
+    to establish which one they hit (#344). This re-issues the same call purely
+    to read the reason back.
+    """
+
+    def _session(self, *, status: int = 403, body: object = None, raises: object = None):  # noqa: ANN202
+        response = MagicMock()
+        response.status = status
+        response.json = AsyncMock(return_value=body)
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=False)
+        session = MagicMock()
+        session.post = AsyncMock(return_value=response, side_effect=raises)
+        return session
+
+    def _body(self, reason: str | None, message: str = "Requests are blocked.") -> dict:
+        details = [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": reason}]
+        return {
+            "error": {
+                "code": 403,
+                "message": message,
+                "status": "PERMISSION_DENIED",
+                **({"details": details} if reason else {}),
+            }
+        }
+
+    @pytest.mark.asyncio
+    async def test_returns_the_structured_reason_and_message(self) -> None:
+        session = self._session(body=self._body("API_KEY_SERVICE_BLOCKED"))
+
+        reason, message = await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package="com.ajaxsystems",
+        )
+
+        assert reason == "API_KEY_SERVICE_BLOCKED"
+        assert message == "Requests are blocked."
+
+    @pytest.mark.asyncio
+    async def test_sends_the_api_key_and_package_google_checks(self) -> None:
+        session = self._session(body=self._body("API_KEY_ANDROID_APP_BLOCKED"))
+
+        await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="my-project",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package="com.ajaxsystems",
+        )
+
+        url = session.post.call_args[0][0]
+        headers = session.post.call_args[1]["headers"]
+        assert "my-project" in url
+        assert headers["x-goog-api-key"] == "AIza-key"
+        # The package is the thing under test in the ANDROID_APP_BLOCKED case:
+        # probing without it would answer a different question than the one
+        # the failed registration asked.
+        assert headers["X-Android-Package"] == "com.ajaxsystems"
+
+    @pytest.mark.asyncio
+    async def test_omits_the_package_header_when_unknown(self) -> None:
+        session = self._session(body=self._body("API_KEY_ANDROID_APP_BLOCKED"))
+
+        await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        )
+
+        assert "X-Android-Package" not in session.post.call_args[1]["headers"]
+
+    @pytest.mark.asyncio
+    async def test_message_survives_a_body_with_no_structured_reason(self) -> None:
+        # Google's error shapes vary; the sentence still names the package it
+        # saw, which is the actionable half.
+        session = self._session(body=self._body(None, message="application <empty> blocked"))
+
+        reason, message = await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        )
+
+        assert reason is None
+        assert message == "application <empty> blocked"
+
+    @pytest.mark.asyncio
+    async def test_non_403_answers_nothing(self) -> None:
+        # A different status means the probe isn't reproducing the failure it
+        # was called about, so it has nothing trustworthy to say.
+        session = self._session(status=200, body={})
+
+        assert await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        ) == (None, None)
+
+    @pytest.mark.asyncio
+    async def test_transport_error_answers_nothing_instead_of_raising(self) -> None:
+        # This runs while a failure is already being handled — a diagnostic
+        # that breaks startup would be worse than no diagnostic.
+        session = self._session(raises=OSError("network down"))
+
+        assert await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        ) == (None, None)
+
+    @pytest.mark.asyncio
+    async def test_unexpected_body_shape_answers_nothing(self) -> None:
+        session = self._session(body=["not", "a", "dict"])
+
+        assert await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        ) == (None, None)
+
+
+class TestLogFcmRefusalReason:
+    """The listener turns the probe's answer into an actionable log line (#344)."""
+
+    def _listener(self, app_label: str = "Ajax") -> AjaxNotificationListener:
+        return AjaxNotificationListener(
+            hass=MagicMock(),
+            coordinator=MagicMock(),
+            **_VALID_FCM_SHAPES,
+            entry_id="entry-x",
+            app_label=app_label,
+        )
+
+    @pytest.mark.asyncio
+    async def test_service_blocked_tells_the_user_to_change_key(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        listener = self._listener()
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(return_value=("API_KEY_SERVICE_BLOCKED", "blocked")),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
+
+        assert "API_KEY_SERVICE_BLOCKED" in caplog.text
+        assert "not scoped for FCM" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_app_blocked_points_at_the_package_not_the_key(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The opposite remedy: telling this user to extract another key is
+        # exactly the wrong advice, which is the whole point of #344.
+        listener = self._listener()
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(return_value=("API_KEY_ANDROID_APP_BLOCKED", "blocked")),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
+
+        assert "may be correct" in caplog.text
+        assert "com.ajaxsystems" in caplog.text
+        assert "app label chosen during setup" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_app_blocked_says_when_no_package_was_sent(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # An unmapped co-brand sends no package at all — a blank-package
+        # request is refused whatever key the user extracted, so the log has
+        # to say the header was missing rather than name a package.
+        listener = self._listener(app_label="Yavir")
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(return_value=("API_KEY_ANDROID_APP_BLOCKED", "blocked")),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), None
+            )
+
+        assert "<none sent>" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_unknown_reason_asks_for_the_line_in_the_report(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        listener = self._listener()
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(return_value=("SOMETHING_NEW", "blocked")),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
+
+        assert "SOMETHING_NEW" in caplog.text
+        assert "include this line when reporting" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_other_failures_do_not_probe(self) -> None:
+        # The network and project-mismatch branches already say everything
+        # they can; an extra request there is pure noise.
+        listener = self._listener()
+        probe = AsyncMock()
+        with patch(
+            "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason", probe
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register and check in to gcm"), "com.ajaxsystems"
+            )
+
+        probe.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_answer_logs_no_extra_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        listener = self._listener()
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(return_value=(None, None)),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
+
+        assert caplog.text == ""
+
+    @pytest.mark.asyncio
+    async def test_probe_exception_never_escapes(self) -> None:
+        # Runs inside the handler for a failure that is already being reported.
+        listener = self._listener()
+        with patch(
+            "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+            AsyncMock(side_effect=RuntimeError("probe exploded")),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
 
 
 class TestApplySecurityStateFromEvent:

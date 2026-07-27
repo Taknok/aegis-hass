@@ -123,6 +123,7 @@ from custom_components.aegis_ajax.notification_fcm_creds import (  # noqa: E402,
     _fcm_creds_hash,
     _is_terminal_fcm_failure,
     _validate_fcm_shape,
+    async_probe_fcm_refusal_reason,
 )
 
 
@@ -357,6 +358,7 @@ class AjaxNotificationListener:
                 if _is_terminal_fcm_failure(exc):
                     await self._rejected_store.async_save({"hash": creds_hash})
                 _LOGGER.warning(_classify_fcm_failure(exc), exc_info=True)
+                await self._async_log_fcm_refusal_reason(exc, android_package)
                 if self._entry_id:
                     async_register_fcm_credentials_invalid(self._hass, entry_id=self._entry_id)
                 return
@@ -390,6 +392,63 @@ class AjaxNotificationListener:
         self._start_push_client_supervisor()
         if not started:
             self._schedule_fcm_restart(time.monotonic())
+
+    async def _async_log_fcm_refusal_reason(
+        self, exc: BaseException, android_package: str | None
+    ) -> None:
+        """Log the reason Google actually gave for refusing the api-key (#344).
+
+        Only runs for the api-key refusal branch — the other failures already
+        say everything they can. One extra request on a path that has already
+        failed, in exchange for turning "FCM credentials rejected" from a
+        multi-day conversation with the reporter into a single log line that
+        names the fix.
+
+        Best-effort throughout: an unanswered probe logs nothing extra rather
+        than adding noise, and never interferes with the registration failure
+        that is already being handled.
+        """
+        if "unable to register with fcm" not in str(exc).lower():
+            return
+        import aiohttp  # noqa: PLC0415
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                reason, message = await async_probe_fcm_refusal_reason(
+                    session,
+                    fcm_project_id=self._fcm_project_id,
+                    fcm_app_id=self._fcm_app_id,
+                    fcm_api_key=self._fcm_api_key,
+                    android_package=android_package,
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("FCM refusal-reason probe failed", exc_info=True)
+            return
+        if reason is None and message is None:
+            _LOGGER.debug("FCM refusal-reason probe returned no reason")
+            return
+        if reason == "API_KEY_SERVICE_BLOCKED":
+            advice = (
+                "this key is not scoped for FCM — extract a different `AIza…` "
+                "and re-enter the four values via the Repair card"
+            )
+        elif reason == "API_KEY_ANDROID_APP_BLOCKED":
+            advice = (
+                "the key's Android restriction rejected this request; the key "
+                "itself may be correct. The request identified itself as "
+                f"package {android_package or '<none sent>'} — if that is not "
+                "the package of the app your credentials came from, the app "
+                "label chosen during setup is the thing to fix, not the key"
+            )
+        else:
+            advice = "please include this line when reporting the problem"
+        _LOGGER.warning(
+            "Google refused the FCM api-key with reason=%s (%s) — %s. "
+            "Context: https://github.com/bvis/aegis-hass/issues/344",
+            reason or "unspecified",
+            message or "no message",
+            advice,
+        )
 
     async def _async_start_push_client(self, *, register_repair_on_failure: bool = True) -> bool:
         """Create and start the FcmPushClient; True when it started.

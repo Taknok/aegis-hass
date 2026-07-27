@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from typing import Any
 
 # Permissive Firebase-Installations shape match for `fcm_app_id`. We do NOT
 # enforce a hash-length range — `1.5.3-beta.4` tried that with `30..64`
@@ -97,6 +98,98 @@ def _fcm_creds_hash(
     return hashlib.sha256(joined.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
+# Firebase Installations is the endpoint that validates the api-key before any
+# FCM registration can proceed, and the only place Google states *why* it
+# refused. `firebase_messaging` calls it internally and discards the response
+# body, so the reason never reaches us through the exception — see
+# `_classify_fcm_failure`. `async_probe_fcm_refusal_reason` re-issues the same
+# call ourselves purely to read that reason back.
+_FIREBASE_INSTALLATIONS_URL = (
+    "https://firebaseinstallations.googleapis.com/v1/projects/{project_id}/installations"
+)
+_FCM_PROBE_TIMEOUT = 10
+
+
+async def async_probe_fcm_refusal_reason(
+    session: Any,  # noqa: ANN401 — aiohttp.ClientSession, kept untyped to avoid the import
+    *,
+    fcm_project_id: str,
+    fcm_app_id: str,
+    fcm_api_key: str,
+    android_package: str | None,
+) -> tuple[str | None, str | None]:
+    """Ask Firebase Installations why it refused, and return `(reason, message)`.
+
+    `firebase_messaging` collapses two opposite refusals into one error string
+    and swallows the HTTP body that tells them apart:
+
+      * `API_KEY_SERVICE_BLOCKED` — the key is real but not scoped for FCM
+        (a Maps / ML Kit key from the same APK). Fix: use a different `AIza…`.
+      * `API_KEY_ANDROID_APP_BLOCKED` — the key is right, but Google's Android
+        restriction on it rejected *our* request (wrong or absent calling
+        package). Fix: nothing to do with which key was extracted.
+
+    Without this, every "FCM credentials rejected" report costs a round trip
+    with the reporter to establish which one they hit (#344). One extra request,
+    only on a path that has already failed.
+
+    The api-key is refused at Google's API gateway, before the request body is
+    validated, so a minimal body is enough to get the reason back — we do not
+    need (and deliberately do not send) a synthesised installation id.
+
+    Returns `(None, None)` when the probe can't answer: any transport error, a
+    non-403 response, or a body without a reason. Never raises — a diagnostic
+    that breaks startup is worse than no diagnostic. The api-key is sent (it is
+    the thing being tested) but never returned or logged by this function.
+    """
+    payload = {"appId": fcm_app_id, "authVersion": "FIS_v2", "sdkVersion": "a:17.0.0"}
+    headers = {"x-goog-api-key": fcm_api_key, "Content-Type": "application/json"}
+    if android_package:
+        headers["X-Android-Package"] = android_package
+    try:
+        response = await session.post(
+            _FIREBASE_INSTALLATIONS_URL.format(project_id=fcm_project_id),
+            json=payload,
+            headers=headers,
+            timeout=_FCM_PROBE_TIMEOUT,
+        )
+        async with response:
+            if response.status != 403:
+                return None, None
+            body = await response.json(content_type=None)
+    except Exception:  # noqa: BLE001
+        return None, None
+    return _extract_refusal_reason(body)
+
+
+def _extract_refusal_reason(body: Any) -> tuple[str | None, str | None]:  # noqa: ANN401
+    """Pull `(reason, message)` out of a Google API error body.
+
+    The machine-readable reason lives in `error.details[].reason` on an
+    `ErrorInfo` entry; `error.message` is the human sentence, which also names
+    the calling package Google saw (`… Android client application <empty> …`)
+    and is worth surfacing even when no structured reason is present.
+
+    Tolerant of every shape it hasn't seen: anything unexpected yields `None`
+    rather than an exception, because this only ever runs while already
+    handling a failure.
+    """
+    if not isinstance(body, dict):
+        return None, None
+    error = body.get("error")
+    if not isinstance(error, dict):
+        return None, None
+    message = error.get("message")
+    reason = None
+    details = error.get("details")
+    if isinstance(details, list):
+        for detail in details:
+            if isinstance(detail, dict) and detail.get("reason"):
+                reason = str(detail["reason"])
+                break
+    return reason, (str(message) if message else None)
+
+
 def _is_terminal_fcm_failure(exc: BaseException) -> bool:
     """True when an FCM registration error is a Google credential rejection
     (won't change on retry), False for transient / host-unreachable errors.
@@ -154,18 +247,18 @@ def _classify_fcm_failure(exc: BaseException) -> str:
         )
     if "unable to register with fcm" in lower:
         return (
-            "Firebase Installations refused the api-key (HTTP 403 — "
-            "API_KEY_ANDROID_APP_BLOCKED or API_KEY_SERVICE_BLOCKED). Both point "
-            "at the wrong `AIza…` key: the Ajax APK's native library ships several "
-            "`AIza…` strings — one for FCM and one or more for other Google "
-            "services (Maps / ML Kit), and `strings.xml`'s `google_maps_key` is a "
-            "real `AIza…` that is NOT the FCM key. Only the FCM-scoped key from "
-            "`libnative-lib.so` is accepted here; a Maps-scoped key surfaces as "
-            "API_KEY_SERVICE_BLOCKED, a package-restricted one as "
-            "API_KEY_ANDROID_APP_BLOCKED. If you extracted the wrong `AIza…`, try "
-            "the others via the Repair card under Settings → Repairs. See "
+            "Firebase Installations refused the api-key (HTTP 403). Two different "
+            "causes produce this and they need opposite fixes: "
+            "API_KEY_SERVICE_BLOCKED means the key is real but not scoped for FCM "
+            "(the Ajax APK ships several `AIza…` strings — Maps and ML Kit keys "
+            "among them — and only the FCM one is accepted here), while "
+            "API_KEY_ANDROID_APP_BLOCKED means the key may be correct but Google's "
+            "Android restriction on it rejected this request, which has nothing to "
+            "do with which key you extracted. The next log line reports which one "
+            "Google actually returned. See "
             "https://github.com/bvis/aegis-hass#where-the-values-live for the "
-            "extraction guide."
+            "extraction guide, and re-enter the values via the Repair card under "
+            "Settings → Repairs to try again."
         )
     if "unable to register and check in to gcm" in lower:
         return (
