@@ -29,7 +29,10 @@ from custom_components.aegis_ajax.api.hub_object import (
 )
 from custom_components.aegis_ajax.api.media import MediaApi
 from custom_components.aegis_ajax.api.models import Device as DeviceModel
-from custom_components.aegis_ajax.api.models import is_device_deactivated
+from custom_components.aegis_ajax.api.models import (
+    device_deactivation_kinds,
+    is_device_deactivated,
+)
 from custom_components.aegis_ajax.api.security import SecurityApi
 from custom_components.aegis_ajax.api.session import AuthenticationError
 from custom_components.aegis_ajax.api.spaces import SpacesApi
@@ -133,6 +136,21 @@ _TAMPER_SOURCE_KEYS: dict[str, str] = {
 # tampers. So this stays read-only for now — the probe below logs the values
 # so a reporter on DEBUG can confirm the semantics on their own hardware.
 _HTS_TAMPER_CANDIDATE_KEYS: tuple[int, ...] = (0x04, 0x0F)
+
+# HTS per-device kv keys that may carry the device's bypass configuration
+# (#338) — read-only probe, nothing is routed off them.
+#
+# Two independent hints put them here. A hardware log of an app-side
+# *re*activation showed `0xb7` on the device's STATUS_UPDATE row and `0xb6` on
+# the accompanying SETTINGS_UPDATE row, both reading `00` once the device was
+# back in protection. And `CommonJewellerPart.bypass_part` — a `BypassPart`
+# carrying the device's `capabilities` and its list of enabled `bypass_mode`s
+# — is field `0xB7` in the gRPC model. If the numbering spaces coincide, the
+# data that would explain the accept-but-inert write (a device whose enabled
+# modes exclude the one we send) is already arriving on a transport we consume,
+# no extra request needed. If they don't, these keys mean something else
+# entirely — hence a probe and not a feature.
+_HTS_BYPASS_CANDIDATE_KEYS: tuple[int, ...] = (0xB6, 0xB7)
 
 # Marks a `tamper` status as sourced from the HTS status stream rather than the
 # gRPC device stream. The gRPC snapshot on these hubs has no tamper field at
@@ -837,11 +855,19 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return
             actual = is_device_deactivated(current)
             if actual != expected:
+                # Symptom only, deliberately no cause. The obvious guess —
+                # "the account lacks the rights" — was disproved on hardware
+                # (#338): the same account deactivates the very same device
+                # from the Ajax app and it takes effect, so only the command
+                # path is inert. Do not put a diagnosis back in this string
+                # until one is actually established; users paste it into
+                # issues and a wrong cause sends them chasing permissions.
                 _LOGGER.warning(
-                    "Bypass %s for device %s (%s) was accepted by the hub but "
-                    "the device still reads %s — the account most likely lacks "
-                    "the rights for this deactivation mode, so the command was "
-                    "a silent no-op (#338)",
+                    "Bypass %s for device %s (%s) was accepted by the hub, but a "
+                    "read-back still reports the device as %s — the command had no "
+                    "effect. Deactivating the device from the Ajax app does work; "
+                    "why the command path is ignored is still being investigated, "
+                    "see https://github.com/bvis/aegis-hass/issues/338",
                     "enable" if expected else "disable",
                     device_id,
                     device.name,
@@ -1104,6 +1130,9 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # signal only on the status stream. Runs before anything that can
         # return early so every device family is covered.
         self._maybe_apply_hts_device_tamper(device_id_hex, device, kv)
+        # Bypass-configuration candidate keys (#338) — read-only, logged before
+        # anything that can return early so every device family reports them.
+        self._log_hts_bypass_candidates(device_id_hex, device, kv)
         # Internal temperature via HTS 0x02 (#229), for device families with no
         # gRPC temperature source (Curtain Outdoor Plus/Base). Additive: only
         # fills when the device doesn't already carry a temperature, so devices
@@ -1170,6 +1199,33 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             self.request_security_snapshot_refresh()
         return True
+
+    def _log_hts_bypass_candidates(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """DEBUG-log the HTS bypass-configuration candidate keys (#338).
+
+        Read-only by design — see `_HTS_BYPASS_CANDIDATE_KEYS`. The device's
+        current deactivation state goes on the same line, because that is what
+        makes a capture conclusive: a device the panel has deactivated and one
+        whose bypass command is accepted-but-inert should differ here if these
+        keys really carry `BypassPart`. A bare byte tells us nothing on its own;
+        the pairing with `deactivated=` does.
+
+        Silent when the row carries neither key, so firmwares that don't report
+        them add no log noise.
+        """
+        present = {key: kv[key] for key in _HTS_BYPASS_CANDIDATE_KEYS if key in kv}
+        if not present:
+            return
+        _LOGGER.debug(
+            "HTS bypass probe: device=%s type=%s candidates=%s deactivated=%s kinds=%s",
+            device_id_hex,
+            device.device_type,
+            {f"0x{key:02X}": value.hex() for key, value in present.items()},
+            is_device_deactivated(device),
+            device_deactivation_kinds(device),
+        )
 
     def _maybe_apply_hts_device_tamper(
         self, device_id_hex: str, device: Device, kv: dict[int, bytes]
