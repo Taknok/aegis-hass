@@ -10,7 +10,11 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from custom_components.aegis_ajax.api.models import DeviceCommand
+from custom_components.aegis_ajax.api.models import (
+    DeviceCommand,
+    device_deactivation_kinds,
+    is_device_deactivated,
+)
 from custom_components.aegis_ajax.const import (
     BYPASS_REQUIRED_PERMISSION,
     BYPASS_SWITCHES_ALWAYS,
@@ -275,8 +279,15 @@ class AjaxSwitch(CoordinatorEntity[AjaxCobrandedCoordinator], SwitchEntity):
 class AjaxBypassSwitch(CoordinatorEntity[AjaxCobrandedCoordinator], SwitchEntity):
     """Deactivate (bypass) a device so it's excluded while the system is armed.
 
-    `on` = device bypassed/deactivated (permanent, "engineering"), `off` =
-    active. Mirrors the `bypassed` flag the snapshot reports.
+    `on` = the device is excluded from protection, `off` = active. The state
+    reflects the panel's reality regardless of who deactivated the device —
+    the Ajax app, an installer, or this switch — because a device deactivated
+    outside HA reports it through the `*_deactivation_*` statuses and leaves
+    the snapshot's `bypassed` flag False (#338). Reading only that flag showed
+    a disabled sensor as live protection.
+
+    Writing still goes out as the permanent ("engineering") deactivation; the
+    granular mode in force is exposed as the `deactivation_kinds` attribute.
     """
 
     _attr_has_entity_name = True
@@ -313,7 +324,20 @@ class AjaxBypassSwitch(CoordinatorEntity[AjaxCobrandedCoordinator], SwitchEntity
         device = self._device
         if device is None:
             return None
-        return bool(device.bypassed)
+        return is_device_deactivated(device)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose which deactivation mode(s) the panel has in force (#338).
+
+        Automations that only care about a fully disabled device can gate on
+        `temporary_deactivation_whole` / `one_time_deactivation_whole` instead
+        of the switch state, which also turns on for a tamper-only
+        deactivation. Mind the inverted naming — see `DEACTIVATION_STATUS_KEYS`.
+        """
+        device = self._device
+        kinds = device_deactivation_kinds(device) if device is not None else []
+        return {"deactivation_kinds": kinds}
 
     async def async_turn_on(self, **kwargs: object) -> None:
         await self._set_bypass(enable=True)
@@ -329,6 +353,10 @@ class AjaxBypassSwitch(CoordinatorEntity[AjaxCobrandedCoordinator], SwitchEntity
             enable=enable,
         )
         await async_send_device_command(self.coordinator, cmd)
+        # The hub can accept this command and apply nothing (#338), so the
+        # entity must be corrected by an independent read rather than trusting
+        # the success response. Only reached when the write did not raise.
+        self.coordinator.schedule_bypass_confirm(self._device_id, expected=enable)
 
 
 class AjaxChimeSwitch(CoordinatorEntity[AjaxCobrandedCoordinator], SwitchEntity):

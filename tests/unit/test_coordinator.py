@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from dataclasses import replace
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -41,7 +42,7 @@ def _make_space(space_id: str = "s1") -> Space:
     )
 
 
-def _make_device(device_id: str = "d1") -> Device:
+def _make_device(device_id: str = "d1", statuses: dict | None = None) -> Device:
     return Device(
         id=device_id,
         hub_id="hub-1",
@@ -52,7 +53,7 @@ def _make_device(device_id: str = "d1") -> Device:
         state=DeviceState.ONLINE,
         malfunctions=0,
         bypassed=False,
-        statuses={},
+        statuses=statuses if statuses is not None else {},
         battery=None,
     )
 
@@ -1016,6 +1017,51 @@ class TestStreamHandlers:
         coordinator.devices["d1"] = _make_device("d1")
 
         coordinator._handle_status_update("d1", "door_opened", {"op": 1})
+
+        assert "tamper" not in coordinator.devices["d1"].statuses
+
+    def test_handle_status_update_deactivation_folds_into_deactivated(self) -> None:
+        # #338: the realtime path must reach the same shared key as the
+        # snapshot parser, or a device deactivated while HA is running keeps
+        # reporting live protection until the next full snapshot.
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "temporary_deactivation_whole", {"op": 1})
+
+        statuses = coordinator.devices["d1"].statuses
+        assert statuses.get("temporary_deactivation_whole") is True
+        assert statuses.get("deactivated") is True
+
+    def test_handle_status_update_deactivation_clears_on_remove(self) -> None:
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "one_time_deactivation_whole", {"op": 1})
+        coordinator._handle_status_update("d1", "one_time_deactivation_whole", {"op": 3})
+
+        statuses = coordinator.devices["d1"].statuses
+        assert "one_time_deactivation_whole" not in statuses
+        assert "deactivated" not in statuses
+
+    def test_handle_status_update_deactivation_holds_while_other_kind_active(self) -> None:
+        # Tamper protection re-enabled while the whole-device deactivation
+        # stands → the switch must stay on.
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "temporary_deactivation_whole", {"op": 1})
+        coordinator._handle_status_update("d1", "temporary_deactivation_tamper", {"op": 1})
+        coordinator._handle_status_update("d1", "temporary_deactivation_tamper", {"op": 3})
+
+        statuses = coordinator.devices["d1"].statuses
+        assert statuses.get("deactivated") is True
+
+    def test_handle_status_update_deactivation_tamper_is_not_a_tamper_alarm(self) -> None:
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1")
+
+        coordinator._handle_status_update("d1", "temporary_deactivation_tamper", {"op": 1})
 
         assert "tamper" not in coordinator.devices["d1"].statuses
 
@@ -3019,6 +3065,107 @@ class TestSirenSettingsConfirm:
 
         coordinator._devices_api.get_hub_device_siren_settings.assert_not_called()
         assert "gone" not in coordinator._siren_confirm_pending
+
+
+class TestBypassConfirm:
+    """#338 option A — a bypass write the hub accepts but never applies must
+    not leave the switch showing the requested state. An independent read-back
+    corrects the entity and logs a warning."""
+
+    def _make(self, *, statuses: dict | None = None) -> AjaxCobrandedCoordinator:  # noqa: F821
+        coordinator = _make_coordinator(["s1"])
+        coordinator.async_set_updated_data = MagicMock()
+        coordinator.spaces = {"s1": _make_space("s1")}
+        coordinator.devices = {"d1": _make_device("d1", statuses=statuses)}
+        return coordinator
+
+    def test_schedule_creates_confirm_task(self) -> None:
+        coordinator = self._make()
+
+        coordinator.schedule_bypass_confirm("d1", expected=True)
+
+        coordinator.hass.async_create_task.assert_called_once()
+        assert "d1" in coordinator._bypass_confirm_pending
+
+    def test_schedule_is_single_flight_per_device(self) -> None:
+        coordinator = self._make()
+
+        coordinator.schedule_bypass_confirm("d1", expected=True)
+        coordinator.schedule_bypass_confirm("d1", expected=True)
+
+        coordinator.hass.async_create_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_confirm_applies_the_fresh_snapshot(self) -> None:
+        coordinator = self._make()
+        fresh = _make_device(
+            "d1", statuses={"temporary_deactivation_whole": True, "deactivated": True}
+        )
+        coordinator._devices_api.get_devices_snapshot = AsyncMock(return_value=[fresh])
+        coordinator._bypass_confirm_pending.add("d1")
+
+        with patch("custom_components.aegis_ajax.coordinator.BYPASS_CONFIRM_DELAY", 0):
+            await coordinator._async_confirm_bypass("d1", expected=True)
+
+        assert coordinator.devices["d1"].statuses.get("deactivated") is True
+        assert "d1" not in coordinator._bypass_confirm_pending
+
+    @pytest.mark.asyncio
+    async def test_confirm_warns_when_the_hub_ignored_the_write(self, caplog) -> None:  # noqa: ANN001
+        # The accept-but-inert case: the command returned success, the read
+        # back shows the device still active.
+        coordinator = self._make()
+        coordinator._devices_api.get_devices_snapshot = AsyncMock(return_value=[_make_device("d1")])
+        coordinator._bypass_confirm_pending.add("d1")
+
+        with (
+            patch("custom_components.aegis_ajax.coordinator.BYPASS_CONFIRM_DELAY", 0),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.coordinator"),
+        ):
+            await coordinator._async_confirm_bypass("d1", expected=True)
+
+        assert "d1" in caplog.text
+        assert "338" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_confirm_silent_when_the_hub_applied_the_write(self, caplog) -> None:  # noqa: ANN001
+        coordinator = self._make(statuses={"deactivated": True})
+        coordinator._devices_api.get_devices_snapshot = AsyncMock(
+            return_value=[_make_device("d1", statuses={"deactivated": True})]
+        )
+        coordinator._bypass_confirm_pending.add("d1")
+
+        with (
+            patch("custom_components.aegis_ajax.coordinator.BYPASS_CONFIRM_DELAY", 0),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.coordinator"),
+        ):
+            await coordinator._async_confirm_bypass("d1", expected=True)
+
+        assert caplog.text == ""
+
+    @pytest.mark.asyncio
+    async def test_confirm_read_error_clears_pending(self) -> None:
+        coordinator = self._make()
+        coordinator._devices_api.get_devices_snapshot = AsyncMock(side_effect=RuntimeError("boom"))
+        coordinator._bypass_confirm_pending.add("d1")
+
+        with patch("custom_components.aegis_ajax.coordinator.BYPASS_CONFIRM_DELAY", 0):
+            await coordinator._async_confirm_bypass("d1", expected=True)
+
+        assert "d1" not in coordinator._bypass_confirm_pending
+
+    @pytest.mark.asyncio
+    async def test_confirm_vanished_device_is_noop(self) -> None:
+        coordinator = self._make()
+        coordinator.devices = {}
+        coordinator._devices_api.get_devices_snapshot = AsyncMock()
+        coordinator._bypass_confirm_pending.add("d1")
+
+        with patch("custom_components.aegis_ajax.coordinator.BYPASS_CONFIRM_DELAY", 0):
+            await coordinator._async_confirm_bypass("d1", expected=True)
+
+        coordinator._devices_api.get_devices_snapshot.assert_not_called()
+        assert "d1" not in coordinator._bypass_confirm_pending
 
 
 class TestPollSafetyTimer:

@@ -7,6 +7,8 @@ from enum import IntEnum
 from typing import Any
 
 from custom_components.aegis_ajax.const import (
+    DEACTIVATED_KEY,
+    DEACTIVATION_STATUS_KEYS,
     ChimeStatus,
     ConnectionStatus,
     DeviceState,
@@ -166,6 +168,35 @@ class Device:
     @property
     def is_online(self) -> bool:
         return self.state == DeviceState.ONLINE
+
+
+def is_device_deactivated(device: Any) -> bool:  # noqa: ANN401
+    """True when the panel has this device excluded from protection (#338).
+
+    Two independent sources say so and either is sufficient:
+    `profile.bypassed` (set when the deactivation came through the path the
+    snapshot models as a bypass) and the `*_deactivation_*` statuses (what a
+    device deactivated from the Ajax app actually reports — `bypassed` stays
+    False in that case, which is the whole reason #338 existed).
+
+    The granular statuses are checked as well as the folded key they normally
+    arrive with, so a device whose statuses came from an older persisted cache
+    (written before the fold existed) still reads correctly.
+
+    Takes the device structurally rather than as a `Device` method so the
+    entity layer and the coordinator share one definition of "deactivated".
+    """
+    return bool(
+        device.bypassed or device.statuses.get(DEACTIVATED_KEY) or device_deactivation_kinds(device)
+    )
+
+
+def device_deactivation_kinds(device: Any) -> list[str]:  # noqa: ANN401
+    """Which deactivation modes are in force, in `DEACTIVATION_STATUS_KEYS`
+    order (#338). Empty when the device is active, or when it is deactivated
+    only via the snapshot's `bypassed` flag, which carries no mode.
+    """
+    return [key for key in DEACTIVATION_STATUS_KEYS if device.statuses.get(key)]
 
 
 @dataclass(frozen=True)

@@ -126,6 +126,34 @@ class TestAsyncGetConfigEntryDiagnostics:
         assert "door_opened" in dev_info["statuses"]
 
     @pytest.mark.asyncio
+    async def test_active_device_reports_no_deactivation(self, entry: MagicMock) -> None:
+        result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+        dev_info = result["devices"]["dev-1"]
+        assert dev_info["deactivated"] is False
+        assert dev_info["deactivation_kinds"] == []
+
+    @pytest.mark.asyncio
+    async def test_app_deactivated_device_is_visible(self, coordinator: MagicMock) -> None:
+        # #338: `bypassed` alone can't answer "is this sensor protecting
+        # anything" — a device deactivated from the Ajax app leaves it False.
+        from dataclasses import replace
+
+        coordinator.devices["dev-1"] = replace(
+            _make_device(),
+            statuses={"temporary_deactivation_whole": True, "deactivated": True},
+        )
+        e = MagicMock()
+        e.runtime_data = coordinator
+        e.data = {"spaces": ["space-1"]}
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), e)
+
+        dev_info = result["devices"]["dev-1"]
+        assert dev_info["bypassed"] is False
+        assert dev_info["deactivated"] is True
+        assert dev_info["deactivation_kinds"] == ["temporary_deactivation_whole"]
+
+    @pytest.mark.asyncio
     async def test_firmware_update_maps_included(self, entry: MagicMock) -> None:
         # 2.1 / project rule (#148): every entity-driving field must land
         # in the diagnostics dump — both `update.*` sources included.
