@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.15.1] - unreleased
 
 ### Fixed
 - **A device deactivated in the Ajax app now shows as bypassed in Home Assistant (#338).** Deactivating a device from the Ajax app (or having an installer do it) excludes it from protection, but Home Assistant kept showing its bypass switch `off` and the sensor itself as live protection — the integration only read the snapshot's bypass flag, which stays unset for that path, and never read the four deactivation statuses the hub actually reports. The bypass switch now reads `on` for a device deactivated by anyone, through either the initial snapshot or a real-time change, and a new `deactivation_kinds` attribute names the mode in force so an automation can distinguish a fully disabled device from one with only its tamper protection off. Mind Ajax's own wording, which the attribute preserves: `temporary_deactivation_*` is the **permanent** deactivation (until re-enabled) and `one_time_deactivation_*` lasts a single arming cycle. The diagnostics download reports both sources side by side. Thanks to @wip3out3r for the four-mode hardware mapping and to @aavdberg for the analysis that scoped it.
