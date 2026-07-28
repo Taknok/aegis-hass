@@ -2351,6 +2351,166 @@ class TestHtsBypassCandidateProbe:
         coordinator.async_set_updated_data.assert_not_called()
 
 
+class TestHtsButtonActivityProbe:
+    """HTS `0x39`/`0x40` as a Button's last-activity timestamp (#348).
+
+    Evidence base: one install's Ajax Button in control mode, where `0x39` on
+    the device's STATUS_UPDATE row moved to the exact second of each press —
+    `6a683b9f` (05:18:23Z) for a press logged 08:18:25 local and `6a683cbd`
+    (05:23:09Z) for one logged 08:23:10, on a UTC+3 install. Both a short and a
+    long click moved that one key, so it cannot carry the two separate actions
+    the issue asks for, and whether it also moves on a supervision ping is
+    unproven. Hence a transition-only probe: an untouched Button must stay
+    silent, because that silence is what falsifies the ping reading.
+
+    The values below are the real captured ones.
+    """
+
+    # 0x39 as captured on two consecutive presses of the same Button.
+    FIRST_PRESS = b"\x6a\x68\x3b\x9f"  # 2026-07-28T05:18:23Z
+    SECOND_PRESS = b"\x6a\x68\x3c\xbd"  # 2026-07-28T05:23:09Z
+
+    def _make_device(self, device_type: str = "button") -> Device:
+        return Device(
+            id="313E5F32",
+            hub_id="hub-1",
+            name="Boto",
+            device_type=device_type,
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+
+    def test_a_press_after_a_known_value_logs_the_decoded_transition(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        # First row establishes the baseline, second is the press.
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.SECOND_PRESS})
+
+        assert "HTS button probe" in caplog.text
+        assert "key=0x39" in caplog.text
+        assert "6a683b9f -> 6a683cbd" in caplog.text
+        # The decoded epoch is what lets a reporter line the line up against
+        # the wall-clock moment they pressed.
+        assert "2026-07-28T05:23:09" in caplog.text
+
+    def test_first_sighting_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        # The boot snapshot re-reports whatever the last press left behind;
+        # logging it would look like a press at every restart.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+
+        assert "HTS button probe" not in caplog.text
+
+    def test_an_unchanged_value_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        # This is the control case the whole probe exists for: the 60s
+        # STATUS_BODY re-reports the same value, and an untouched Button must
+        # produce no line at all — otherwise silence proves nothing.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            for _ in range(5):
+                coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+
+        assert "HTS button probe" not in caplog.text
+
+    def test_the_two_keys_are_tracked_independently(self, caplog: pytest.LogCaptureFixture) -> None:
+        # `0x40` held an old epoch on the install's other Button, so it means
+        # something rarer than a press. It must not be conflated with `0x39`.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        coordinator._on_hts_device_kv(
+            "0023F477", "313E5F32", {0x39: self.FIRST_PRESS, 0x40: b"\x00\x00\x00\x00"}
+        )
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E5F32", {0x39: self.SECOND_PRESS, 0x40: b"\x00\x00\x00\x00"}
+            )
+
+        assert "key=0x39" in caplog.text
+        assert "key=0x40" not in caplog.text
+
+    def test_a_non_timestamp_value_is_not_dressed_up_as_a_date(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # A key that carries a counter or bitfield on another firmware must be
+        # reported as raw, not converted into a plausible-looking date.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x40: b"\x00\x00\x00\x00"})
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x40: b"\x00\x00\x00\x01"})
+
+        assert "HTS button probe" in caplog.text
+        assert "not an epoch: 1" in caplog.text
+
+    def test_a_short_value_is_reported_by_length(self, caplog: pytest.LogCaptureFixture) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: b"\x00"})
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: b"\x01"})
+
+        assert "not an epoch: 1b" in caplog.text
+
+    def test_two_buttons_do_not_share_a_baseline(self, caplog: pytest.LogCaptureFixture) -> None:
+        # The install has two Buttons with different `0x39` values; a shared
+        # cache would report a press on each alternating row.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+        coordinator.devices["313E63EC"] = replace(self._make_device(), id="313E63EC")
+
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("0023F477", "313E63EC", {0x39: self.SECOND_PRESS})
+
+        assert "HTS button probe" not in caplog.text
+
+    def test_nothing_logged_for_a_device_without_the_keys(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device(device_type="relay")
+        # A relay row carries electrical readings, which reach the update path.
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x42: b"\x00\x00\x00\x00"})
+
+        assert "HTS button probe" not in caplog.text
+
+    def test_probe_does_not_change_any_state(self) -> None:
+        # Read-only: short vs long click is still unresolved, and emitting an
+        # HA event off a key that may track supervision pings would fire
+        # phantom presses into the user's automations.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.SECOND_PRESS})
+
+        assert coordinator.devices["313E5F32"].statuses == {}
+        coordinator.async_set_updated_data.assert_not_called()
+
+
 class TestHtsCaseTamperRouting:
     """HTS `0x04`/`0x0f` drive the shared `tamper` status (#339).
 
