@@ -1377,6 +1377,9 @@ class TestClassifyFcmFailure:
         assert "API_KEY_ANDROID_APP_BLOCKED" in msg
         assert "API_KEY_SERVICE_BLOCKED" in msg
         assert "API_KEY_INVALID" in msg
+        # #344's second key returned a bare PERMISSION_DENIED — a fourth cause,
+        # and the only one that is neither a wrong key nor a restriction.
+        assert "PERMISSION_DENIED" in msg
         assert "next log line" in msg
         assert "Repair card" in msg
         # #344 arrived as HTTP 400, not the 403 this message used to assert.
@@ -1495,10 +1498,51 @@ class TestProbeFcmRefusalReason:
         assert "X-Android-Package" not in session.post.call_args[1]["headers"]
 
     @pytest.mark.asyncio
-    async def test_message_survives_a_body_with_no_structured_reason(self) -> None:
+    async def test_status_is_the_reason_when_there_is_no_error_info(self) -> None:
+        # #344 second key: `{"code": 403, "message": "The caller does not have
+        # permission", "status": "PERMISSION_DENIED"}` — no `details` at all.
+        # Falling back to the status is what separates a key Google recognises
+        # but won't authorise from one it doesn't recognise (API_KEY_INVALID);
+        # without it this drops into the generic "please report this" branch and
+        # the distinction is lost.
+        session = self._session(
+            body=self._body(None, message="The caller does not have permission")
+        )
+
+        reason, message = await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        )
+
+        assert reason == "PERMISSION_DENIED"
+        assert message == "The caller does not have permission"
+
+    @pytest.mark.asyncio
+    async def test_structured_reason_wins_over_the_status(self) -> None:
+        # An `ErrorInfo` reason is the specific answer; the status is the
+        # coarse one. A 403 body carries both, and the specific one must win.
+        session = self._session(body=self._body("API_KEY_SERVICE_BLOCKED"))
+
+        reason, _ = await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        )
+
+        assert reason == "API_KEY_SERVICE_BLOCKED"
+
+    @pytest.mark.asyncio
+    async def test_message_survives_a_body_with_neither_reason_nor_status(self) -> None:
         # Google's error shapes vary; the sentence still names the package it
         # saw, which is the actionable half.
-        session = self._session(body=self._body(None, message="application <empty> blocked"))
+        session = self._session(
+            body={"error": {"code": 403, "message": "application <empty> blocked"}}
+        )
 
         reason, message = await async_probe_fcm_refusal_reason(
             session,
@@ -1645,6 +1689,34 @@ class TestLogFcmRefusalReason:
         assert "may be correct" in caplog.text
         assert "com.ajaxsystems" in caplog.text
         assert "app label chosen during setup" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_permission_denied_points_at_mixed_builds_not_the_key(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # #344's *second* key: a real key Google won't authorise for this
+        # project's app. The advice must not send the user hunting for another
+        # `AIza…` (that's the API_KEY_INVALID remedy) nor at the app label
+        # (that's the ANDROID_APP_BLOCKED one) — the api-key is the one value no
+        # offline check can tie to the other three.
+        listener = self._listener()
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(
+                    return_value=("PERMISSION_DENIED", "The caller does not have permission")
+                ),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
+
+        assert "PERMISSION_DENIED" in caplog.text
+        assert "same app build" in caplog.text
+        # Must not fall through to the useless generic branch.
+        assert "please include this line when reporting" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_app_blocked_says_when_no_package_was_sent(

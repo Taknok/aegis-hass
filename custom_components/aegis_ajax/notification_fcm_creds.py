@@ -136,6 +136,12 @@ async def async_probe_fcm_refusal_reason(
       * `API_KEY_ANDROID_APP_BLOCKED` (HTTP 403) — the key is right, but
         Google's Android restriction on it rejected *our* request (wrong or
         absent calling package). Fix: nothing to do with which key was picked.
+      * `PERMISSION_DENIED` (HTTP 403, no `ErrorInfo` at all) — a real key that
+        Google will not authorise for this project's app. Distinct from
+        `API_KEY_INVALID`: the string *is* one of Google's. Commonly the four
+        values don't all come from the same app build, which the offline shape
+        check cannot catch — it ties `fcm_sender_id` to `fcm_app_id`, but
+        nothing offline can tie the api-key to either.
 
     Without this, every "FCM credentials rejected" report costs a round trip
     with the reporter to establish which one they hit (#344). One extra request,
@@ -183,6 +189,16 @@ def _extract_refusal_reason(body: Any) -> tuple[str | None, str | None]:  # noqa
     the calling package Google saw (`… Android client application <empty> …`)
     and is worth surfacing even when no structured reason is present.
 
+    When there is no `ErrorInfo` at all we fall back to `error.status`. Google
+    does return bare bodies — #344 produced
+    `{"code": 403, "message": "The caller does not have permission",
+    "status": "PERMISSION_DENIED"}` with no `details` whatsoever — and that
+    status is not noise: it separates a key Google *recognises but won't
+    authorise* from one it doesn't recognise at all (`API_KEY_INVALID`), which
+    are different problems with different fixes. Reading it back means the
+    caller can branch on it like any other reason instead of falling through to
+    "please report this line".
+
     Tolerant of every shape it hasn't seen: anything unexpected yields `None`
     rather than an exception, because this only ever runs while already
     handling a failure.
@@ -200,6 +216,8 @@ def _extract_refusal_reason(body: Any) -> tuple[str | None, str | None]:  # noqa
             if isinstance(detail, dict) and detail.get("reason"):
                 reason = str(detail["reason"])
                 break
+    if reason is None and error.get("status"):
+        reason = str(error["status"])
     return reason, (str(message) if message else None)
 
 
@@ -263,9 +281,11 @@ def _classify_fcm_failure(exc: BaseException) -> str:
             "Firebase Installations rejected the api-key. Several causes produce "
             "this and they need different fixes — API_KEY_INVALID (Google does "
             "not recognise the string as an api-key at all), "
-            "API_KEY_SERVICE_BLOCKED (a real key, but not the FCM-scoped one) or "
+            "API_KEY_SERVICE_BLOCKED (a real key, but not the FCM-scoped one), "
             "API_KEY_ANDROID_APP_BLOCKED (the key may be correct and its Android "
-            "restriction rejected this request instead). The next log line "
+            "restriction rejected this request instead) or PERMISSION_DENIED (a "
+            "real key that is not authorised for this project's app, usually "
+            "because the four values come from different app builds). The next log line "
             "reports which one Google actually returned; please include it when "
             "reporting the problem. See "
             "https://github.com/bvis/aegis-hass#where-the-values-live for the "
