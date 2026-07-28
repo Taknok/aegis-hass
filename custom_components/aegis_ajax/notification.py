@@ -427,7 +427,16 @@ class AjaxNotificationListener:
         if reason is None and message is None:
             _LOGGER.debug("FCM refusal-reason probe returned no reason")
             return
-        if reason == "API_KEY_SERVICE_BLOCKED":
+        if reason == "API_KEY_INVALID":
+            advice = (
+                "Google does not recognise this string as one of its api-keys "
+                "at all — so this is neither a wrong-scope nor a restriction "
+                "problem. Check the value was copied whole (no truncation or "
+                "stray whitespace); if it was, that `AIza…` is not a live key "
+                "and another string from the same source has to be tried, "
+                "re-extracted from the app version you actually run"
+            )
+        elif reason == "API_KEY_SERVICE_BLOCKED":
             advice = (
                 "this key is not scoped for FCM — extract a different `AIza…` "
                 "and re-enter the four values via the Repair card"

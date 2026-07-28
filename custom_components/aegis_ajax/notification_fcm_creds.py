@@ -100,10 +100,12 @@ def _fcm_creds_hash(
 
 # Firebase Installations is the endpoint that validates the api-key before any
 # FCM registration can proceed, and the only place Google states *why* it
-# refused. `firebase_messaging` calls it internally and discards the response
-# body, so the reason never reaches us through the exception — see
-# `_classify_fcm_failure`. `async_probe_fcm_refusal_reason` re-issues the same
-# call ourselves purely to read that reason back.
+# rejected it. `firebase_messaging` calls it internally and writes the response
+# body to its OWN logger (`firebase_messaging.fcmregister`, at ERROR) before
+# raising a bare `RuntimeError` — so the reason exists but never reaches us
+# through the exception, and a user only sees it after being told to enable a
+# second logger. `async_probe_fcm_refusal_reason` re-issues the same call
+# ourselves purely to read that reason back without asking anyone for anything.
 _FIREBASE_INSTALLATIONS_URL = (
     "https://firebaseinstallations.googleapis.com/v1/projects/{project_id}/installations"
 )
@@ -120,27 +122,38 @@ async def async_probe_fcm_refusal_reason(
 ) -> tuple[str | None, str | None]:
     """Ask Firebase Installations why it refused, and return `(reason, message)`.
 
-    `firebase_messaging` collapses two opposite refusals into one error string
-    and swallows the HTTP body that tells them apart:
+    `firebase_messaging` collapses every api-key rejection into one error string
+    and swallows the HTTP body that tells them apart. At least three reach us,
+    with three different remedies:
 
-      * `API_KEY_SERVICE_BLOCKED` — the key is real but not scoped for FCM
-        (a Maps / ML Kit key from the same APK). Fix: use a different `AIza…`.
-      * `API_KEY_ANDROID_APP_BLOCKED` — the key is right, but Google's Android
-        restriction on it rejected *our* request (wrong or absent calling
-        package). Fix: nothing to do with which key was extracted.
+      * `API_KEY_INVALID` (HTTP 400) — Google does not recognise the string as
+        one of its api-keys at all. Not a scope or restriction problem: either
+        the paste is damaged, or that `AIza…` was never a live key (the native
+        library carries several strings of the right shape, and keys get
+        rotated between app builds).
+      * `API_KEY_SERVICE_BLOCKED` (HTTP 403) — the key is real but not scoped
+        for FCM (a Maps / ML Kit key from the same APK). Fix: a different key.
+      * `API_KEY_ANDROID_APP_BLOCKED` (HTTP 403) — the key is right, but
+        Google's Android restriction on it rejected *our* request (wrong or
+        absent calling package). Fix: nothing to do with which key was picked.
 
     Without this, every "FCM credentials rejected" report costs a round trip
     with the reporter to establish which one they hit (#344). One extra request,
     only on a path that has already failed.
 
-    The api-key is refused at Google's API gateway, before the request body is
+    The api-key is rejected at Google's API gateway, before the request body is
     validated, so a minimal body is enough to get the reason back — we do not
     need (and deliberately do not send) a synthesised installation id.
 
+    Any non-2xx response is read: the status code is NOT part of the contract.
+    An earlier revision only parsed 403s, on the assumption that this branch
+    meant a refusal — and #344 turned out to be a 400, so the probe stayed
+    silent on the very report it was written for.
+
     Returns `(None, None)` when the probe can't answer: any transport error, a
-    non-403 response, or a body without a reason. Never raises — a diagnostic
-    that breaks startup is worse than no diagnostic. The api-key is sent (it is
-    the thing being tested) but never returned or logged by this function.
+    successful response, or a body without a reason or message. Never raises —
+    a diagnostic that breaks startup is worse than no diagnostic. The api-key is
+    sent (it is the thing being tested) but never returned or logged here.
     """
     payload = {"appId": fcm_app_id, "authVersion": "FIS_v2", "sdkVersion": "a:17.0.0"}
     headers = {"x-goog-api-key": fcm_api_key, "Content-Type": "application/json"}
@@ -154,7 +167,7 @@ async def async_probe_fcm_refusal_reason(
             timeout=_FCM_PROBE_TIMEOUT,
         )
         async with response:
-            if response.status != 403:
+            if response.status < 400:
                 return None, None
             body = await response.json(content_type=None)
     except Exception:  # noqa: BLE001
@@ -247,15 +260,14 @@ def _classify_fcm_failure(exc: BaseException) -> str:
         )
     if "unable to register with fcm" in lower:
         return (
-            "Firebase Installations refused the api-key (HTTP 403). Two different "
-            "causes produce this and they need opposite fixes: "
-            "API_KEY_SERVICE_BLOCKED means the key is real but not scoped for FCM "
-            "(the Ajax APK ships several `AIza…` strings — Maps and ML Kit keys "
-            "among them — and only the FCM one is accepted here), while "
-            "API_KEY_ANDROID_APP_BLOCKED means the key may be correct but Google's "
-            "Android restriction on it rejected this request, which has nothing to "
-            "do with which key you extracted. The next log line reports which one "
-            "Google actually returned. See "
+            "Firebase Installations rejected the api-key. Several causes produce "
+            "this and they need different fixes — API_KEY_INVALID (Google does "
+            "not recognise the string as an api-key at all), "
+            "API_KEY_SERVICE_BLOCKED (a real key, but not the FCM-scoped one) or "
+            "API_KEY_ANDROID_APP_BLOCKED (the key may be correct and its Android "
+            "restriction rejected this request instead). The next log line "
+            "reports which one Google actually returned; please include it when "
+            "reporting the problem. See "
             "https://github.com/bvis/aegis-hass#where-the-values-live for the "
             "extraction guide, and re-enter the values via the Repair card under "
             "Settings → Repairs to try again."
