@@ -1376,9 +1376,12 @@ class TestClassifyFcmFailure:
         msg = _classify_fcm_failure(RuntimeError("Unable to register with fcm"))
         assert "API_KEY_ANDROID_APP_BLOCKED" in msg
         assert "API_KEY_SERVICE_BLOCKED" in msg
-        assert "nothing to do with which key you extracted" in msg
+        assert "API_KEY_INVALID" in msg
         assert "next log line" in msg
         assert "Repair card" in msg
+        # #344 arrived as HTTP 400, not the 403 this message used to assert.
+        # Don't name a status the branch can't guarantee.
+        assert "403" not in msg
 
     def test_gcm_checkin_failure_points_at_network(self) -> None:
         # Probe result: emitted exclusively on network failure (DNS / firewall
@@ -1509,9 +1512,27 @@ class TestProbeFcmRefusalReason:
         assert message == "application <empty> blocked"
 
     @pytest.mark.asyncio
-    async def test_non_403_answers_nothing(self) -> None:
-        # A different status means the probe isn't reproducing the failure it
-        # was called about, so it has nothing trustworthy to say.
+    async def test_reads_a_400_not_only_a_403(self) -> None:
+        # #344 came back as HTTP 400 / API_KEY_INVALID, not the 403 this probe
+        # was written for. An earlier revision parsed 403s only and stayed
+        # silent on the exact report that motivated it — the status code is
+        # not part of the contract, the error body is.
+        session = self._session(status=400, body=self._body("API_KEY_INVALID"))
+
+        reason, _ = await async_probe_fcm_refusal_reason(
+            session,
+            fcm_project_id="p",
+            fcm_app_id="1:1:android:ab",
+            fcm_api_key="AIza-key",
+            android_package=None,
+        )
+
+        assert reason == "API_KEY_INVALID"
+
+    @pytest.mark.asyncio
+    async def test_success_answers_nothing(self) -> None:
+        # A 2xx means the probe isn't reproducing the failure it was called
+        # about, so it has nothing trustworthy to say.
         session = self._session(status=200, body={})
 
         assert await async_probe_fcm_refusal_reason(
@@ -1579,6 +1600,29 @@ class TestLogFcmRefusalReason:
 
         assert "API_KEY_SERVICE_BLOCKED" in caplog.text
         assert "not scoped for FCM" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_invalid_key_is_neither_scope_nor_restriction(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The reason #344 actually returned. A third remedy: Google doesn't
+        # know the string at all, so telling the user about FCM scopes or
+        # package restrictions would send them the wrong way twice over.
+        listener = self._listener()
+        with (
+            patch(
+                "custom_components.aegis_ajax.notification.async_probe_fcm_refusal_reason",
+                AsyncMock(return_value=("API_KEY_INVALID", "API key not valid.")),
+            ),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            await listener._async_log_fcm_refusal_reason(
+                RuntimeError("Unable to register with fcm"), "com.ajaxsystems"
+            )
+
+        assert "API_KEY_INVALID" in caplog.text
+        assert "does not recognise this string" in caplog.text
+        assert "truncation" in caplog.text
 
     @pytest.mark.asyncio
     async def test_app_blocked_points_at_the_package_not_the_key(
