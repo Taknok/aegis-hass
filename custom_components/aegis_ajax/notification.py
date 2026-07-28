@@ -449,6 +449,19 @@ class AjaxNotificationListener:
                 "the package of the app your credentials came from, the app "
                 "label chosen during setup is the thing to fix, not the key"
             )
+        elif reason == "PERMISSION_DENIED":
+            advice = (
+                "Google recognises this string as one of its api-keys but will "
+                "not authorise it for this project's app — so unlike "
+                "API_KEY_INVALID the key itself is real, and unlike the two "
+                "BLOCKED reasons it is not a scope or restriction problem. The "
+                "usual cause is that the four values do not all come from the "
+                "same app build: the api-key is the one value nothing can be "
+                "cross-checked against offline (fcm_sender_id is verified "
+                "against fcm_app_id, but no local check can tie the key to "
+                "either). Re-read all four from a single build and enter them "
+                "together, rather than swapping the key alone"
+            )
         else:
             advice = "please include this line when reporting the problem"
         _LOGGER.warning(
