@@ -152,6 +152,57 @@ _HTS_TAMPER_CANDIDATE_KEYS: tuple[int, ...] = (0x04, 0x0F)
 # entirely — hence a probe and not a feature.
 _HTS_BYPASS_CANDIDATE_KEYS: tuple[int, ...] = (0xB6, 0xB7)
 
+# HTS per-device kv keys that may carry a Button's last-activity timestamp
+# (#348) — read-only probe, nothing is routed off them.
+#
+# A hardware log of an Ajax Button in control mode showed `0x39` on the
+# device's STATUS_UPDATE row moving to the exact second of each press, twice,
+# on two independent presses: a press logged at 08:18:25 local carried
+# `0x39=6a683b9f` (05:18:23Z) and one at 08:23:10 carried `0x39=6a683cbd`
+# (05:23:09Z) on a UTC+3 install. So `0x39` decodes as a big-endian Unix epoch
+# and it is the only signal a control-mode press produces at all — the
+# `button_1_on` / `button_2_on` FCM tags never appeared, and the coincident
+# gRPC delta is a plain `battery` status.
+#
+# Two things that capture could NOT establish, which is why this is a probe and
+# not an event entity:
+#
+#   1. **Short vs long click are indistinguishable in it.** Both presses moved
+#      `0x39` and nothing else; `0x40` stayed `00000000` on that device. So a
+#      one-key signal cannot carry the two separate actions the issue asks for.
+#      (`0x40` did hold an old epoch — 2026-07-03 — on the install's *other*
+#      Button, so it means something rarer than a press, not the second action.)
+#   2. **Whether it moves without a press.** Ajax peripherals ping the hub for
+#      supervision, and if `0x39` were last-radio-contact rather than
+#      last-press, routing an HA event off it would fire phantom presses on
+#      every ping. Logging only *transitions* makes an idle install the control
+#      case: silence over a quiet window falsifies the ping reading, while a
+#      1:1 match with presses confirms it.
+_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS: tuple[int, ...] = (0x39, 0x40)
+
+# Bounds for treating a 4-byte HTS value as a big-endian Unix epoch. Deliberately
+# wide — the point is only to reject values that clearly aren't timestamps (`00000000`,
+# a counter, a bitfield) so the probe never dresses an unrelated key up as a date.
+_HTS_EPOCH_MIN = 1_420_070_400  # 2015-01-01Z
+_HTS_EPOCH_MAX = 4_102_444_800  # 2100-01-01Z
+
+
+def _describe_hts_epoch(value: bytes) -> str:
+    """Render a 4-byte HTS value as a big-endian UTC timestamp, or say why not.
+
+    Used by the #348 Button probe so a DEBUG line can be lined up against the
+    wall-clock moment of a press without hand-converting hex. Anything that is
+    not a plausible epoch is reported as such rather than being forced into a
+    date — see `_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS`.
+    """
+    if len(value) != 4:
+        return f"not an epoch: {len(value)}b"
+    seconds = int.from_bytes(value, "big")
+    if not _HTS_EPOCH_MIN <= seconds <= _HTS_EPOCH_MAX:
+        return f"not an epoch: {seconds}"
+    return dt_util.utc_from_timestamp(seconds).isoformat()
+
+
 # Marks a `tamper` status as sourced from the HTS status stream rather than the
 # gRPC device stream. The gRPC snapshot on these hubs has no tamper field at
 # all, so a fresh snapshot would silently wipe the status; this lets
@@ -323,6 +374,12 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # authoritative re-read. Tracking the last value avoids re-nudging on
         # every 60s STATUS_BODY probe (which re-reports the same flag).
         self._space_security_arm_flags: dict[str, int] = {}
+        # Last-seen value of each Button activity-candidate key (#348), keyed by
+        # `(device_id_hex, kv_key)`. Only a *change* is logged, so an untouched
+        # Button is silent and a quiet window becomes the control case that
+        # tells a press apart from a supervision ping. See
+        # `_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS`.
+        self._hts_button_activity: dict[tuple[str, int], str] = {}
         # One-shot guard for the #206 Bug-B SmartLock id probe (DEBUG-only).
         self._smart_lock_probe_done = False
         # Per-space monotonic timestamp of when the hub first reported
@@ -1133,6 +1190,10 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Bypass-configuration candidate keys (#338) — read-only, logged before
         # anything that can return early so every device family reports them.
         self._log_hts_bypass_candidates(device_id_hex, device, kv)
+        # Button activity-timestamp candidate keys (#348) — read-only, same
+        # placement rationale as the bypass probe above: every device family
+        # gets probed, and the keys are Button-specific in every capture so far.
+        self._log_hts_button_activity_candidates(device_id_hex, device, kv)
         # Internal temperature via HTS 0x02 (#229), for device families with no
         # gRPC temperature source (Curtain Outdoor Plus/Base). Additive: only
         # fills when the device doesn't already carry a temperature, so devices
@@ -1226,6 +1287,49 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             is_device_deactivated(device),
             device_deactivation_kinds(device),
         )
+
+    def _log_hts_button_activity_candidates(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """DEBUG-log transitions of the Button activity-candidate keys (#348).
+
+        Read-only by design — see `_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS`. Logs
+        only when a value *changes*, which is the whole point: the reading to
+        falsify is that these keys track supervision pings rather than presses,
+        and that shows up as transitions on a Button nobody is touching. A
+        first sighting is recorded silently, because the boot snapshot re-reports
+        whatever the last press left behind and would otherwise look like a press
+        at every restart.
+
+        Each 4-byte value is also rendered as a big-endian Unix epoch, so the log
+        can be compared against the wall-clock moment of a press without anyone
+        having to convert hex by hand. Values that are not 4 bytes, or that fall
+        outside a plausible epoch window, are reported as `raw` only — a key that
+        carries something else on another firmware must not be dressed up as a
+        timestamp.
+
+        Silent when the row carries none of the keys, so device families that
+        don't report them add no log noise.
+        """
+        for key in _HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS:
+            value = kv.get(key)
+            if value is None:
+                continue
+            current = value.hex()
+            cache_key = (device_id_hex, key)
+            previous = self._hts_button_activity.get(cache_key)
+            self._hts_button_activity[cache_key] = current
+            if previous is None or previous == current:
+                continue
+            _LOGGER.debug(
+                "HTS button probe: device=%s type=%s key=0x%02X %s -> %s (%s)",
+                device_id_hex,
+                device.device_type,
+                key,
+                previous,
+                current,
+                _describe_hts_epoch(value),
+            )
 
     def _maybe_apply_hts_device_tamper(
         self, device_id_hex: str, device: Device, kv: dict[int, bytes]
