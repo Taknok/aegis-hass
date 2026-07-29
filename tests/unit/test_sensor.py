@@ -680,6 +680,48 @@ class TestAjaxDeviceElectricalSensors:
         sensor = AjaxDeviceVoltageSensor(coordinator, "311B058D")
         assert sensor.native_value == 230.0
 
+    def test_relay_voltage_sensor_reports_volts_not_millivolts(self) -> None:
+        """#325 end to end: the reporter's Relay row must not read 11,671 V.
+
+        Goes through the parser rather than hand-building `DeviceReadings`, so
+        the per-family unit conversion is part of what is under test.
+        """
+        from custom_components.aegis_ajax.api.hts.hub_state import (
+            DEVICE_KEY_VOLTAGE_V,
+            parse_device_readings,
+        )
+        from custom_components.aegis_ajax.sensor import AjaxDeviceVoltageSensor
+
+        readings = parse_device_readings("relay", {DEVICE_KEY_VOLTAGE_V: b"\x2d\x97"})
+        coordinator = self._make_coordinator(device_type="relay")
+        coordinator.device_readings = {"311B058D": readings}
+
+        sensor = AjaxDeviceVoltageSensor(coordinator, "311B058D")
+        assert sensor.native_value == pytest.approx(11.671)
+
+    def test_relay_derived_power_not_inflated_by_millivolts(self) -> None:
+        """The derived-power sensor inherited the 1000x error via voltage (#325).
+
+        0.04 A x 11.671 V = 0.467 W. Before the fix the same row produced
+        ~467 W out of a dry-contact relay.
+        """
+        from custom_components.aegis_ajax.api.hts.hub_state import (
+            DEVICE_KEY_CURRENT_MA,
+            DEVICE_KEY_VOLTAGE_V,
+            parse_device_readings,
+        )
+        from custom_components.aegis_ajax.sensor import AjaxDeviceDerivedPowerSensor
+
+        readings = parse_device_readings(
+            "relay",
+            {DEVICE_KEY_VOLTAGE_V: b"\x2d\x97", DEVICE_KEY_CURRENT_MA: b"\x28"},
+        )
+        coordinator = self._make_coordinator(device_type="relay")
+        coordinator.device_readings = {"311B058D": readings}
+
+        sensor = AjaxDeviceDerivedPowerSensor(coordinator, "311B058D")
+        assert sensor.native_value == pytest.approx(0.46684)
+
     def test_voltage_sensor_none_when_not_reported(self) -> None:
         from custom_components.aegis_ajax.sensor import AjaxDeviceVoltageSensor
 

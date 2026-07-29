@@ -44,5 +44,17 @@ message HubDevice {
     MotionProtectG3 motion_protect_g3 = 24;
     MotionProtectPlusG3 motion_protect_plus_g3 = 25;
     SmartLockYale smart_lock_yale = 26;
+    // The remaining siren SKUs (#354). Cases 27-61 and 69+ exist upstream for
+    // other device families but are not modelled here yet — an unmodelled case
+    // decodes as an unknown oneof, which is what kept these sirens' settings
+    // unreadable. Only the siren block is filled in; extend the rest alongside
+    // the device families that need it.
+    StreetSirenS street_siren_s = 62;
+    StreetSirenDoubleDeck street_siren_double_deck = 63;
+    StreetSirenSDoubleDeck street_siren_s_double_deck = 64;
+    StreetSirenFibra street_siren_fibra = 65;
+    StreetSirenDoubleDeckFibra street_siren_double_deck_fibra = 66;
+    StreetSirenPlusFibra street_siren_plus_fibra = 67;
+    HomeSirenPlus home_siren_plus = 68;
   }
 }

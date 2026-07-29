@@ -178,8 +178,10 @@ class DeviceReadings:
     treat any `None` as "no measurement available" and render the
     entity as `unknown` rather than zero.
 
-    `voltage_v` is the device-reported line voltage in volts (no
-    scaling). Older WallSwitch firmwares omit it entirely — the
+    `voltage_v` is always in volts, but the raw sub-key is NOT always in
+    volts: the WallSwitch/Socket families report whole volts while the
+    Jeweller Relay reports millivolts, so the per-family key map does the
+    conversion (#325). Older WallSwitch firmwares omit it entirely — the
     derived-power sensor falls back to a nominal voltage in that case.
 
     `power_w` is the device-reported instantaneous power in watts. Only
@@ -188,33 +190,48 @@ class DeviceReadings:
     × voltage`.
     """
 
-    current_ma: int | None = None
-    power_consumed_wh: int | None = None
-    voltage_v: int | None = None
-    power_w: int | None = None
+    current_ma: float | None = None
+    power_consumed_wh: float | None = None
+    voltage_v: float | None = None
+    power_w: float | None = None
 
 
-# Per-device-family sub-key map. Same DeviceReadings shape feeds both
-# families; the mapping selects which sub-keys land in which field and
+# Per-device-family sub-key map. Same DeviceReadings shape feeds every
+# family; the mapping selects which sub-keys land in which field and
 # at what scale. Scale converts the raw big-endian integer into the
 # field's stored unit (e.g. Outlet current is reported in 10 mA units,
 # so scale=10 yields the same mA contract the WallSwitch path already
-# uses downstream).
-_WALLSWITCH_KEY_MAP: dict[int, tuple[str, int]] = {
+# uses downstream; the Relay's millivolts need 0.001 to reach volts).
+_WALLSWITCH_KEY_MAP: dict[int, tuple[str, float]] = {
     DEVICE_KEY_VOLTAGE_V: ("voltage_v", 1),
     DEVICE_KEY_CURRENT_MA: ("current_ma", 1),
     DEVICE_KEY_POWER_CONSUMED_WH: ("power_consumed_wh", 1),
 }
-_OUTLET_KEY_MAP: dict[int, tuple[str, int]] = {
+# The Jeweller Relay shares the WallSwitch sub-keys but not its units
+# (#325). `proto_src/systems/ajax/protobuf/hub/device/relay.proto` declares
+# `Int32Value voltage_milli_volts = 0x35`, whereas `wall_switch.proto` and
+# `socket.proto` declare `voltage_volts` at the identical sub-key — the HTS
+# per-device kv keys are the field numbers of those legacy protos, so the
+# vendor's own field names settle the unit. Note the name is unconditional:
+# the Relay accepts 7-24 V⎓ *or* 110-230 V~ and reports millivolts either way
+# (a mains-fed unit sends 230000), so a fixed factor is safe for both.
+# `relay_fibra_base` is deliberately left on the WallSwitch map — no
+# `relay_fibra*.proto` exists in `proto_src`, so its unit is unobserved and
+# assuming it matches would be a guess.
+_RELAY_KEY_MAP: dict[int, tuple[str, float]] = {
+    **_WALLSWITCH_KEY_MAP,
+    DEVICE_KEY_VOLTAGE_V: ("voltage_v", 0.001),
+}
+_OUTLET_KEY_MAP: dict[int, tuple[str, float]] = {
     DEVICE_KEY_OUTLET_POWER_W: ("power_w", 1),
     DEVICE_KEY_OUTLET_ENERGY_WH: ("power_consumed_wh", 1),
     DEVICE_KEY_OUTLET_CURRENT_10MA: ("current_ma", 10),
     DEVICE_KEY_OUTLET_VOLTAGE_V: ("voltage_v", 1),
 }
 
-_DEVICE_READINGS_KEY_MAP: dict[str, dict[int, tuple[str, int]]] = {
+_DEVICE_READINGS_KEY_MAP: dict[str, dict[int, tuple[str, float]]] = {
     "wall_switch": _WALLSWITCH_KEY_MAP,
-    "relay": _WALLSWITCH_KEY_MAP,
+    "relay": _RELAY_KEY_MAP,
     "relay_fibra_base": _WALLSWITCH_KEY_MAP,
     "socket": _WALLSWITCH_KEY_MAP,
     "socket_b": _WALLSWITCH_KEY_MAP,
@@ -334,7 +351,7 @@ def parse_device_readings(
     if key_map is None:
         return None
     base = existing if existing is not None else DeviceReadings()
-    fields: dict[str, int | None] = dataclasses.asdict(base)
+    fields: dict[str, float | None] = dataclasses.asdict(base)
     for sub_key, (field_name, scale) in key_map.items():
         raw_bytes = kv.get(sub_key)
         if raw_bytes is None:
@@ -342,7 +359,10 @@ def parse_device_readings(
         raw = _int_be_val(raw_bytes)
         if raw is None:
             continue
-        fields[field_name] = raw * scale
+        # `round` keeps an integer scale integral (round(2409, 3) is 2409) and
+        # trims the binary-float noise a fractional one leaves behind
+        # (11671 * 0.001 is 11.671000000000001).
+        fields[field_name] = round(raw * scale, 3)
     return DeviceReadings(**fields)
 
 

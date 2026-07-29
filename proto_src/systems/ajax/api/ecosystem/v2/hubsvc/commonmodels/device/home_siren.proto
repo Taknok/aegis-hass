@@ -13,6 +13,8 @@ import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_j
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/group_association.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/post_alarm_indication.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/radio_interference_detection_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_wings_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/external_power.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
 
 option swift_prefix = "";
@@ -57,4 +59,20 @@ message HomeSirenS {
   common.DeviceTamperStatus device_tamper_status = 8[(proto.meta.field_tag) = "tampered"];
   common.CommonStandardCompliancePart common_standard_compliance_part = 9;
   common.GroupAssociation group_association = 10;
+}
+
+// #354
+message HomeSirenPlus {
+  common.CommonJewellerPart common_jeweller_part = 1;
+  common.CommonSirenPart common_siren_part = 2;
+  common.AlarmVerification alarm_verification = 3;
+  common.AlarmRestriction alarm_restriction = 4;
+  common.PostAlarmIndication post_alarm_indication_props = 5;
+  common.DeviceBatteryWithoutCharging device_battery = 6;
+  common.DeviceTemperature device_temperature = 7;
+  common.DeviceTamperStatus device_tamper_status = 8[(proto.meta.field_tag) = "tampered"];
+  common.CommonStandardCompliancePart common_standard_compliance_part = 9;
+  common.GroupAssociation group_association = 10;
+  common.CommonWingsPart common_wings_part = 11;
+  common.ExternalPower external_power = 12;
 }

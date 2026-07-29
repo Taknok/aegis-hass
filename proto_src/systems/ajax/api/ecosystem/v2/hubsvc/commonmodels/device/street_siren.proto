@@ -62,3 +62,31 @@ message StreetSirenPlusG3 {
   common.LightIndicationAreaPart light_indication_area_part = 16;
   common.DeviceTamperStatus device_tamper_status = 17[(proto.meta.field_tag) = "tampered"];
 }
+
+// The remaining StreetSiren SKUs (#354). Each carries only the writable siren
+// settings on this API — no temperature, tamper or battery part — which is why
+// their internal temperature still comes from the status stream rather than
+// from here (see HTS_TEMPERATURE_DEVICE_TYPES).
+message StreetSirenS {
+  common.CommonSirenPart common_siren_part = 1;
+}
+
+message StreetSirenDoubleDeck {
+  common.CommonSirenPart common_siren_part = 1;
+}
+
+message StreetSirenSDoubleDeck {
+  common.CommonSirenPart common_siren_part = 1;
+}
+
+message StreetSirenFibra {
+  common.CommonSirenPart common_siren_part = 1;
+}
+
+message StreetSirenDoubleDeckFibra {
+  common.CommonSirenPart common_siren_part = 1;
+}
+
+message StreetSirenPlusFibra {
+  common.CommonSirenPart common_siren_part = 1;
+}
