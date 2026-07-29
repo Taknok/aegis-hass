@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Bouton",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Appuyé"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

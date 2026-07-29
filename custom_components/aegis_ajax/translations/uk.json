@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Кнопка",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Натиснуто"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

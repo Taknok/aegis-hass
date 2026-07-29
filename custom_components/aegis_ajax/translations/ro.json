@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Buton",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Apăsat"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

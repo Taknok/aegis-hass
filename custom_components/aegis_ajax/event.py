@@ -11,6 +11,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from custom_components.aegis_ajax.const import (
     ALL_EVENT_TYPES,
+    BUTTON_PRESS_DEVICE_TYPES,
+    BUTTON_PRESS_EVENT_TYPE,
     DOMAIN,
     DOORBELL_DEVICE_TYPES,
     DOORBELL_EVENT_TYPE,
@@ -41,11 +43,18 @@ async def async_setup_entry(
         for device_id, device in coordinator.devices.items()
         if device.device_type in DOORBELL_DEVICE_TYPES
     ]
-    async_add_entities([*entities, *doorbell_entities])
+    button_entities = [
+        AjaxButtonPressEvent(coordinator=coordinator, device_id=device_id)
+        for device_id, device in coordinator.devices.items()
+        if device.device_type in BUTTON_PRESS_DEVICE_TYPES
+    ]
+    async_add_entities([*entities, *doorbell_entities, *button_entities])
     for entity in entities:
         coordinator.register_event_entity(entity._space_id, entity)
     for doorbell in doorbell_entities:
         coordinator.register_device_event_entity(doorbell._device_id, doorbell)
+    for button in button_entities:
+        coordinator.register_button_event_entity(button._device_id, button)
 
 
 class AjaxSecurityEvent(CoordinatorEntity[AjaxCobrandedCoordinator], EventEntity):
@@ -149,4 +158,54 @@ class AjaxDoorbellEvent(CoordinatorEntity[AjaxCobrandedCoordinator], EventEntity
             return
         # Emit HA's canonical "ring" type, not the internal routing key.
         self._trigger_event(DOORBELL_RING_EVENT_TYPE, data)
+        self.async_write_ha_state()
+
+
+class AjaxButtonPressEvent(CoordinatorEntity[AjaxCobrandedCoordinator], EventEntity):
+    """Per-device press event for an Ajax Button in control mode (#348).
+
+    A Button in *panic* mode already surfaces through the hub-level
+    `AjaxSecurityEvent` as `panic`. Control mode had no path at all: the hub
+    sends no push for it, so the press was invisible to Home Assistant. The
+    coordinator picks it up off the status stream instead and calls
+    `handle_event` here.
+
+    **One event type, not two.** The Button's short and long click are
+    indistinguishable in everything the hub reports — see
+    `BUTTON_PRESS_EVENT_TYPE`. Advertising two would imply a distinction the
+    data cannot support.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "button_press"
+    _attr_device_class = EventDeviceClass.BUTTON
+    _attr_event_types = [BUTTON_PRESS_EVENT_TYPE]
+
+    def __init__(self, coordinator: AjaxCobrandedCoordinator, device_id: str) -> None:
+        super().__init__(coordinator)
+        self._device_id = device_id
+        self._attr_unique_id = f"aegis_ajax_{device_id}_button_press_event"
+        device = coordinator.devices.get(device_id)
+        if device is not None:
+            self._attr_device_info = build_device_info(device, coordinator.rooms)
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, device_id)},
+                manufacturer=MANUFACTURER,
+            )
+
+    @property
+    def event_types(self) -> list[str]:
+        return self._attr_event_types
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister from the coordinator when removed."""
+        self.coordinator._button_event_entities.pop(self._device_id, None)
+        await super().async_will_remove_from_hass()
+
+    def handle_event(self, event_type: str, data: dict[str, Any]) -> None:
+        """Called by the coordinator when this Button's press epoch advances."""
+        if event_type != BUTTON_PRESS_EVENT_TYPE:
+            return
+        self._trigger_event(event_type, data)
         self.async_write_ha_state()

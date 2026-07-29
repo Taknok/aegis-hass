@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_PASSWORD
+from homeassistant.util import dt as dt_util
 
 from custom_components.aegis_ajax.api.models import (
     device_deactivation_kinds,
@@ -169,6 +170,14 @@ async def async_get_config_entry_diagnostics(
                 "is_critical": dfu.is_critical,
             }
             for did, dfu in coordinator.device_firmware_updates.items()
+        },
+        # Last press epoch per Button, which is what drives the Button press
+        # event entity (#348). Rendered as an ISO timestamp because that is what
+        # makes it checkable: if the entity never fires, this says whether the
+        # hub is reporting presses at all and when the last one landed.
+        "button_press_epochs": {
+            did: dt_util.utc_from_timestamp(seconds).isoformat()
+            for did, seconds in coordinator._button_press_epochs.items()
         },
         "stream_tasks": len(coordinator._stream_tasks),
         "notification_listener": coordinator.notification_listener is not None,

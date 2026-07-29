@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Tlačítko",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Stisknuto"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

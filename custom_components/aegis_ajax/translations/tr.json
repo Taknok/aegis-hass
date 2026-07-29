@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Düğme",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Basıldı"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

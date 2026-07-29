@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.15.1] - unreleased
 
 ### Added
+- **An Ajax Button in control mode now fires a Home Assistant event (#348).** A Button set to *control* mode was invisible to Home Assistant: the hub sends no push notification for it, so there was nothing to trigger an automation with. Each Button now gets its own `event` entity (`device_class: button`) that fires **`pressed`**, with the press timestamp the hub reports as an attribute. It rides the hub's status channel rather than push, so **it works without FCM configured**, and it fires whether the system is armed or disarmed. A Button in *panic* mode is unaffected and keeps firing `panic` on the hub's security event entity.
+
+  **One event, not two.** Short and long click cannot be told apart — the hub moves a single value for both, identically, and it does not push control-mode presses at all, so no other source exists to distinguish them. If you were hoping to bind two different actions, that isn't possible with what the hardware reports.
+
+  Two notes. The DoubleButton is panic-only and reports nothing at all in control mode, so it gets no such entity. And as with any event entity, a Home Assistant restart re-delivers the last event with a fresh timestamp — guard automations with `not_from: unavailable` / `unknown` on the state trigger, exactly as the bundled blueprints do. Thanks to @raven2k24 for the hardware captures, including a 20-hour-old timestamp at boot that proved the value only moves on a real press, and to @wip3out3r for the independent negative control on hardware without a Button.
+
+### Added
 - **Siren volume and alarm duration now work on six more siren models (#354).** The Street Siren DoubleDeck, Street Siren S DoubleDeck, Street Siren DoubleDeck Fibra, Street Siren S, Street Siren Fibra and Street Siren Plus Fibra only showed case tamper, bypass and battery — the two config entities the other sirens have got skipped, because the integration couldn't read those models' settings from the hub and creating entities it could never fill in would have been worse than leaving them out. It can read them now, so all six gain a **Siren volume** select and an **Alarm duration** number, behaving exactly as on the models that already had them (values appear on the same throttled refresh after startup, and changing one needs an account with device-edit permission). Note these models report only their settings on this path, so they still get no internal temperature — if you own one and would like that too, say so in #354. Thanks to @nimahel for reporting it on a DoubleDeck.
 
 ### Fixed

@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Botó",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Premut"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

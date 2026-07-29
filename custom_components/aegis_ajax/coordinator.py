@@ -37,6 +37,8 @@ from custom_components.aegis_ajax.api.security import SecurityApi
 from custom_components.aegis_ajax.api.session import AuthenticationError
 from custom_components.aegis_ajax.api.spaces import SpacesApi
 from custom_components.aegis_ajax.const import (
+    BUTTON_PRESS_DEVICE_TYPES,
+    BUTTON_PRESS_EVENT_TYPE,
     BYPASS_CONFIRM_DELAY,
     DEACTIVATED_KEY,
     DEACTIVATION_STATUS_KEYS,
@@ -179,6 +181,11 @@ _HTS_BYPASS_CANDIDATE_KEYS: tuple[int, ...] = (0xB6, 0xB7)
 #      case: silence over a quiet window falsifies the ping reading, while a
 #      1:1 match with presses confirms it.
 _HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS: tuple[int, ...] = (0x39, 0x40)
+# The one key of those two that the press event is actually wired to (#348).
+# `0x40` is deliberately excluded: on a StreetSiren it is a 1-byte counter that
+# advances in lockstep across sirens on the same hub, so it tracks something
+# hub-wide and is not this device's activity.
+_HTS_BUTTON_PRESS_KEY = 0x39
 
 # Bounds for treating a 4-byte HTS value as a big-endian Unix epoch. Deliberately
 # wide — the point is only to reject values that clearly aren't timestamps (`00000000`,
@@ -380,6 +387,15 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # tells a press apart from a supervision ping. See
         # `_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS`.
         self._hts_button_activity: dict[tuple[str, int], str] = {}
+        # Last press epoch seen per Button, keyed by device id (#348). Separate
+        # from the probe cache above on purpose: the probe consumes its own
+        # entry before this runs, and this one holds a decoded int rather than
+        # raw hex so the "time must move forward" check is a plain comparison.
+        self._button_press_epochs: dict[str, int] = {}
+        # Per-device Button press event entities, registered by the event
+        # platform. Kept apart from `_device_event_entities` (doorbells) so the
+        # two dispatch paths can never collide on a shared device id.
+        self._button_event_entities: dict[str, Any] = {}
         # Devices whose row has been seen in at least one body snapshot. Needed
         # to tell a delta-only key apart from a key we simply haven't baselined
         # yet: once a device's body row has arrived without a given key, that
@@ -1214,6 +1230,8 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # placement rationale as the bypass probe above: every device family
         # gets probed, and the keys are Button-specific in every capture so far.
         self._log_hts_button_activity_candidates(device_id_hex, device, kv, from_body=from_body)
+        # Button control-mode press (#348) — fires the per-device event entity.
+        self._maybe_fire_button_press(device_id_hex, device, kv)
         # Internal temperature via HTS 0x02 (#229), for device families with no
         # gRPC temperature source (Curtain Outdoor Plus/Base). Additive: only
         # fills when the device doesn't already carry a temperature, so devices
@@ -1371,6 +1389,71 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 current,
                 _describe_hts_epoch(value),
             )
+
+    def _maybe_fire_button_press(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """Fire the Button's press event when its activity epoch moves (#348).
+
+        Gated on device type: the same sub-key carries unrelated data on other
+        families, so a global read would fire phantom presses off a door
+        sensor's roller-shutter flag. See `BUTTON_PRESS_DEVICE_TYPES`.
+
+        Three guards, all of them there to avoid inventing a press:
+
+        - **A first sighting never fires.** The snapshot re-reports whatever the
+          last press left behind — 20 hours old in the reporter's capture — so
+          firing on it would announce a press at every restart.
+        - **The value must be a plausible epoch**, or the key is carrying
+          something else on this firmware and we want no part of it.
+        - **Time must move forward.** An equal value is the snapshot repeating
+          itself; a lower one is not something a press can produce, so treat it
+          as a new baseline rather than an event.
+
+        Deliberately consumes both snapshot and delta rows. The deltas catch
+        every individual press, while the snapshot samples once a minute and
+        collapses a burst to its last value — so a delta the client missed can
+        still surface via the snapshot, at the cost of a slightly older
+        timestamp. Both paths share one cache, so whichever arrives first fires
+        and the other sees no change.
+
+        Runs on the event loop (HTS listen task), so touching entity state here
+        needs no thread marshalling.
+        """
+        if device.device_type not in BUTTON_PRESS_DEVICE_TYPES:
+            return
+        raw = kv.get(_HTS_BUTTON_PRESS_KEY)
+        if raw is None or len(raw) != 4:
+            return
+        seconds = int.from_bytes(raw, "big")
+        if not _HTS_EPOCH_MIN <= seconds <= _HTS_EPOCH_MAX:
+            return
+        previous = self._button_press_epochs.get(device_id_hex)
+        self._button_press_epochs[device_id_hex] = seconds
+        if previous is None or seconds <= previous:
+            return
+        pressed_at = dt_util.utc_from_timestamp(seconds)
+        _LOGGER.debug(
+            "Button %s pressed at %s (0x39 %s -> %s)",
+            device_id_hex,
+            pressed_at.isoformat(),
+            previous,
+            seconds,
+        )
+        entity = self._button_event_entities.get(device_id_hex)
+        if entity is None:
+            # The Button exists but its event entity hasn't been added yet (or
+            # the user disabled it). Nothing to do — the epoch is cached either
+            # way, so the next press still fires.
+            return
+        entity.handle_event(
+            BUTTON_PRESS_EVENT_TYPE,
+            {"device_id": device_id_hex, "pressed_at": pressed_at.isoformat()},
+        )
+
+    def register_button_event_entity(self, device_id: str, entity: object) -> None:
+        """Register a per-device Button press event entity (#348)."""
+        self._button_event_entities[device_id] = entity
 
     def _maybe_apply_hts_device_tamper(
         self, device_id_hex: str, device: Device, kv: dict[int, bytes]
