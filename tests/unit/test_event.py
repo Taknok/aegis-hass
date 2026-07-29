@@ -92,6 +92,37 @@ class TestAjaxSecurityEvent:
         assert fire_call[0][1]["event_type"] == "door_open"
         assert fire_call[0][1]["device_name"] == "HALLWAY"
 
+    def test_bus_event_carries_the_firing_hub_identity(self) -> None:
+        # The device trigger filters on `hub_id` (#358): without it, an
+        # automation scoped to one hub fires for every hub's events. The
+        # entity is the only place that knows which hub the event belongs
+        # to, so it must stamp its own identity onto the bus payload.
+        entity = self._make_event_entity()
+        entity._trigger_event = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+        entity.hass = MagicMock()
+
+        entity.handle_event("arm", {"raw_tag": "space_armed"})
+
+        fire_call = entity.hass.bus.async_fire.call_args
+        assert fire_call[0][1]["hub_id"] == "hub-1"
+        assert fire_call[0][1]["space_id"] == "space-1"
+
+    def test_bus_hub_identity_wins_over_payload_keys(self) -> None:
+        # The push payload's own fields (device_id of the source fob, and
+        # any future hub_id-shaped key Ajax might add) must not overwrite
+        # the entity's authoritative identity stamp.
+        entity = self._make_event_entity()
+        entity._trigger_event = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+        entity.hass = MagicMock()
+
+        entity.handle_event("arm", {"hub_id": "spoofed", "space_id": "spoofed"})
+
+        fire_call = entity.hass.bus.async_fire.call_args
+        assert fire_call[0][1]["hub_id"] == "hub-1"
+        assert fire_call[0][1]["space_id"] == "space-1"
+
     def test_handle_event_ignores_unknown_type(self) -> None:
         entity = self._make_event_entity()
         entity._trigger_event = MagicMock()

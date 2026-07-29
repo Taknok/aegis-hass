@@ -66,6 +66,7 @@ class AjaxSecurityEvent(CoordinatorEntity[AjaxCobrandedCoordinator], EventEntity
         self._space_id = space_id
         space = coordinator.spaces.get(space_id)
         hub_id = space.hub_id if space else space_id
+        self._hub_id = hub_id
         self._attr_unique_id = f"aegis_ajax_{hub_id}_event"
         self._attr_event_types = ALL_EVENT_TYPES
         hub_device = coordinator.devices.get(hub_id)
@@ -95,10 +96,13 @@ class AjaxSecurityEvent(CoordinatorEntity[AjaxCobrandedCoordinator], EventEntity
             return
         self._trigger_event(event_type, data)
         self.async_write_ha_state()
-        # Fire bus event for logbook descriptions
+        # Fire bus event for logbook descriptions and device triggers. The
+        # identity stamp goes after the payload spread: `data` carries the
+        # *source* device (a fob, a sensor), and the device trigger filters
+        # on which hub fired (#358) — only this entity knows that.
         self.hass.bus.async_fire(
             f"{DOMAIN}_event",
-            {"event_type": event_type, **data},
+            {"event_type": event_type, **data, "hub_id": self._hub_id, "space_id": self._space_id},
         )
         # Optionally surface the event as an HA persistent notification (2.2).
         # The coordinator no-ops when the feature is off or the type isn't in

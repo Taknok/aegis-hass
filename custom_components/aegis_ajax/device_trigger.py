@@ -5,8 +5,10 @@ pressed, …) as a named device trigger on the **hub** device, so users can
 pick them in the Home Assistant automation editor instead of hand-writing an
 event trigger against the `aegis_ajax_event` bus event.
 
-All events fire on a single hub-level `event` entity, so the triggers live on
-the hub device and filter purely by `event_type`.
+All events fire on a single hub-level `event` entity per hub, so the triggers
+live on the hub device and filter by `event_type` plus the firing hub's
+`hub_id` — without the latter, an automation scoped to one hub fires for
+every Ajax system in the installation (#358).
 """
 
 from __future__ import annotations
@@ -81,20 +83,27 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
     ]
 
 
-def _event_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
+def _event_trigger_config(config: dict[str, Any], hub_id: str | None) -> dict[str, Any]:
     """Translate a device trigger config into an event-bus trigger config that
-    fires when `aegis_ajax_event` carries the matching `event_type`.
+    fires when `aegis_ajax_event` carries the matching `event_type` AND was
+    fired by this trigger's own hub (#358).
 
-    The bus payload's discriminator field is literally `event_type` (see
-    `event.py`), not the trigger's own `type` key — match on that.
+    The bus payload's discriminator fields are literally `event_type` and
+    `hub_id` (see `event.py`), not the trigger's own `type`/`device_id` keys —
+    match on those. A `None` hub_id (the HA device was deleted from the
+    registry) degrades to event-type-only matching rather than detaching the
+    automation.
     """
     # Literal keys: the event-trigger config schema keys are stable
     # (`platform` / `event_type` / `event_data`) and not all are re-exported
     # by the trigger module for typed import.
+    event_data: dict[str, Any] = {"event_type": config[CONF_TYPE]}
+    if hub_id is not None:
+        event_data["hub_id"] = hub_id
     return {
         "platform": "event",
         "event_type": EVENT_AEGIS,
-        "event_data": {"event_type": config[CONF_TYPE]},
+        "event_data": event_data,
     }
 
 
@@ -105,7 +114,8 @@ async def async_attach_trigger(
     trigger_info: TriggerInfo,
 ) -> CALLBACK_TYPE:
     """Attach a device trigger by delegating to the event-bus trigger."""
-    event_config = event_trigger.TRIGGER_SCHEMA(_event_trigger_config(config))
+    hub_id = _aegis_id_for_device(hass, config[CONF_DEVICE_ID])
+    event_config = event_trigger.TRIGGER_SCHEMA(_event_trigger_config(config, hub_id))
     return await event_trigger.async_attach_trigger(
         hass, event_config, action, trigger_info, platform_type="device"
     )
