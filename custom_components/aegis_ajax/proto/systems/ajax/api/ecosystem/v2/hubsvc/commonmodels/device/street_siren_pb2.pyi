@@ -27,10 +27,10 @@ import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias as _TypeAlias
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    from typing_extensions import TypeAlias as _TypeAlias
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -98,6 +98,7 @@ class StreetSiren(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["alarm_restriction", b"alarm_restriction", "alarm_verification", b"alarm_verification", "common_jeweller_part", b"common_jeweller_part", "common_siren_part", b"common_siren_part", "common_standard_compliance_part", b"common_standard_compliance_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "external_power", b"external_power", "group_association", b"group_association", "gyroscope", b"gyroscope", "post_alarm_indication_props", b"post_alarm_indication_props"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___StreetSiren: _TypeAlias = StreetSiren  # noqa: Y015
 
@@ -180,5 +181,132 @@ class StreetSirenPlusG3(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["alarm_restriction_part", b"alarm_restriction_part", "alarm_verification_part", b"alarm_verification_part", "bracket_state_part", b"bracket_state_part", "common_jeweller_part", b"common_jeweller_part", "common_siren_part", b"common_siren_part", "common_siren_tamper_part", b"common_siren_tamper_part", "common_sound_compliance_pattern_part", b"common_sound_compliance_pattern_part", "common_standard_compliance_part", b"common_standard_compliance_part", "common_wings_part", b"common_wings_part", "device_battery_without_charging_part", b"device_battery_without_charging_part", "device_tamper_status", b"device_tamper_status", "device_temperature_part", b"device_temperature_part", "external_power_part", b"external_power_part", "group_association_part", b"group_association_part", "light_indication_area_part", b"light_indication_area_part", "post_alarm_indication_part", b"post_alarm_indication_part", "radio_interference_detection_part", b"radio_interference_detection_part"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___StreetSirenPlusG3: _TypeAlias = StreetSirenPlusG3  # noqa: Y015
+
+@_typing.final
+class StreetSirenS(_message.Message):
+    """The remaining StreetSiren SKUs (#354). Each carries only the writable siren
+    settings on this API — no temperature, tamper or battery part — which is why
+    their internal temperature still comes from the status stream rather than
+    from here (see HTS_TEMPERATURE_DEVICE_TYPES).
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_SIREN_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_siren_part(self) -> _common_siren_part_pb2.CommonSirenPart: ...
+    def __init__(
+        self,
+        *,
+        common_siren_part: _common_siren_part_pb2.CommonSirenPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreetSirenS: _TypeAlias = StreetSirenS  # noqa: Y015
+
+@_typing.final
+class StreetSirenDoubleDeck(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_SIREN_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_siren_part(self) -> _common_siren_part_pb2.CommonSirenPart: ...
+    def __init__(
+        self,
+        *,
+        common_siren_part: _common_siren_part_pb2.CommonSirenPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreetSirenDoubleDeck: _TypeAlias = StreetSirenDoubleDeck  # noqa: Y015
+
+@_typing.final
+class StreetSirenSDoubleDeck(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_SIREN_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_siren_part(self) -> _common_siren_part_pb2.CommonSirenPart: ...
+    def __init__(
+        self,
+        *,
+        common_siren_part: _common_siren_part_pb2.CommonSirenPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreetSirenSDoubleDeck: _TypeAlias = StreetSirenSDoubleDeck  # noqa: Y015
+
+@_typing.final
+class StreetSirenFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_SIREN_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_siren_part(self) -> _common_siren_part_pb2.CommonSirenPart: ...
+    def __init__(
+        self,
+        *,
+        common_siren_part: _common_siren_part_pb2.CommonSirenPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreetSirenFibra: _TypeAlias = StreetSirenFibra  # noqa: Y015
+
+@_typing.final
+class StreetSirenDoubleDeckFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_SIREN_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_siren_part(self) -> _common_siren_part_pb2.CommonSirenPart: ...
+    def __init__(
+        self,
+        *,
+        common_siren_part: _common_siren_part_pb2.CommonSirenPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreetSirenDoubleDeckFibra: _TypeAlias = StreetSirenDoubleDeckFibra  # noqa: Y015
+
+@_typing.final
+class StreetSirenPlusFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_SIREN_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_siren_part(self) -> _common_siren_part_pb2.CommonSirenPart: ...
+    def __init__(
+        self,
+        *,
+        common_siren_part: _common_siren_part_pb2.CommonSirenPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_siren_part", b"common_siren_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreetSirenPlusFibra: _TypeAlias = StreetSirenPlusFibra  # noqa: Y015
