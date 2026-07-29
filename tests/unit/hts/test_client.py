@@ -493,7 +493,9 @@ class TestHandleUpdate:
         client._hubs = [MagicMock(hub_id="12345678")]
         client._on_state_update = MagicMock()
         captured: list[tuple[str, str, dict[int, bytes]]] = []
-        client._on_device_kv = lambda hub_id, did, kv: captured.append((hub_id, did, kv))
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
 
         # Mimics a real Outlet STATUS_UPDATE: 4-byte device_id, then
         # multiple (k1=byte, v1=byte) pairs where v1 happens to be 0x03 —
@@ -924,7 +926,9 @@ class TestHandleUpdateNonHubProbe:
         client = _make_client()
         client._hubs = [MagicMock(hub_id="12345678")]
         captured: list[tuple[str, str, dict[int, bytes]]] = []
-        client._on_device_kv = lambda hub_id, did, kv: captured.append((hub_id, did, kv))
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
         msg = HtsMessage(
             sender=0x12345678,
             receiver=client._sender_id,
@@ -958,11 +962,60 @@ class TestHandleUpdateNonHubProbe:
         ]
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("sub_key", "expected_from_body"),
+        [
+            (b"\x09", True),  # STATUS_BODY
+            (b"\x05", True),  # SETTINGS_BODY
+            (b"\x0b", False),  # STATUS_UPDATE
+            (b"\x0c", False),  # SETTINGS_UPDATE
+        ],
+    )
+    async def test_on_device_kv_reports_whether_the_row_came_from_a_body(
+        self, sub_key: bytes, expected_from_body: bool
+    ) -> None:
+        """The body/delta distinction is part of the callback contract (#348).
+
+        A consumer that treats a key's first sighting as an event can only do so
+        for a key that never appears in a body, so the client has to say which
+        kind of message the row came from.
+        """
+        client = _make_client()
+        client._hubs = [MagicMock(hub_id="12345678")]
+        flags: list[bool] = []
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: flags.append(from_body)
+        msg = HtsMessage(
+            sender=0x12345678,
+            receiver=client._sender_id,
+            seq_num=1,
+            link=10,
+            flags=0,
+            msg_type=MsgType.UPDATES,
+            payload=tlv_encode(
+                [
+                    sub_key,
+                    bytes.fromhex("12345678"),
+                    b"\x48",
+                    b"\x02",
+                    bytes.fromhex("311B058D"),
+                    b"\x39",
+                    b"\x6a\x68\x3b\x9f",
+                ]
+            ),
+        )
+
+        await client._handle_update(msg)
+
+        assert flags == [expected_from_body]
+
+    @pytest.mark.asyncio
     async def test_on_device_kv_skips_empty_device_rows(self) -> None:
         client = _make_client()
         client._hubs = [MagicMock(hub_id="12345678")]
         captured: list[tuple[str, str, dict[int, bytes]]] = []
-        client._on_device_kv = lambda hub_id, did, kv: captured.append((hub_id, did, kv))
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
         msg = HtsMessage(
             sender=0x12345678,
             receiver=client._sender_id,
@@ -1069,7 +1122,9 @@ class TestStatusUpdatePush:
         client = _make_client()
         client._hubs = [MagicMock(hub_id="12345678")]
         captured: list[tuple[str, str, dict[int, bytes]]] = []
-        client._on_device_kv = lambda hub_id, did, kv: captured.append((hub_id, did, kv))
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
         msg = HtsMessage(
             sender=0x12345678,
             receiver=client._sender_id,
@@ -1104,7 +1159,9 @@ class TestStatusUpdatePush:
         client = _make_client()
         client._hubs = [MagicMock(hub_id="12345678")]
         captured: list[tuple[str, str, dict[int, bytes]]] = []
-        client._on_device_kv = lambda hub_id, did, kv: captured.append((hub_id, did, kv))
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
         msg = HtsMessage(
             sender=0x12345678,
             receiver=client._sender_id,
@@ -1134,7 +1191,9 @@ class TestStatusUpdatePush:
         client = _make_client()
         client._hubs = [MagicMock(hub_id="12345678")]
         captured: list[tuple[str, str, dict[int, bytes]]] = []
-        client._on_device_kv = lambda hub_id, did, kv: captured.append((hub_id, did, kv))
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
         msg = HtsMessage(
             sender=0x12345678,
             receiver=client._sender_id,

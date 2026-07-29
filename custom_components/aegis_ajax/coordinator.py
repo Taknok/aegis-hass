@@ -380,6 +380,12 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # tells a press apart from a supervision ping. See
         # `_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS`.
         self._hts_button_activity: dict[tuple[str, int], str] = {}
+        # Devices whose row has been seen in at least one body snapshot. Needed
+        # to tell a delta-only key apart from a key we simply haven't baselined
+        # yet: once a device's body row has arrived without a given key, that
+        # key lives only in deltas, and there its first sighting IS the event
+        # rather than a baseline to swallow (#348).
+        self._hts_button_activity_bodies_seen: set[str] = set()
         # One-shot guard for the #206 Bug-B SmartLock id probe (DEBUG-only).
         self._smart_lock_probe_done = False
         # Per-space monotonic timestamp of when the hub first reported
@@ -1155,8 +1161,22 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.hub_network[hub_id] = state
         self.async_set_updated_data({"spaces": self.spaces, "devices": self.devices})
 
-    def _on_hts_device_kv(self, hub_id: str, device_id_hex: str, kv: dict[int, bytes]) -> None:
+    def _on_hts_device_kv(
+        self,
+        hub_id: str,
+        device_id_hex: str,
+        kv: dict[int, bytes],
+        *,
+        from_body: bool = False,
+    ) -> None:
         """Translate a per-device HTS kv block into `DeviceReadings` (#123).
+
+        `from_body` distinguishes a periodic body snapshot (STATUS_BODY /
+        SETTINGS_BODY) from a live per-device delta (STATUS_UPDATE /
+        SETTINGS_UPDATE). Only the #348 probe cares so far — for a key that
+        appears only in deltas, a first sighting is an event and not a
+        baseline. It defaults to False so a caller that doesn't know is treated
+        as the more conservative case.
 
         Called once per non-hub device row inside a STATUS_BODY or
         SETTINGS_BODY. Looks up the device's type from the snapshot the
@@ -1193,7 +1213,7 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Button activity-timestamp candidate keys (#348) — read-only, same
         # placement rationale as the bypass probe above: every device family
         # gets probed, and the keys are Button-specific in every capture so far.
-        self._log_hts_button_activity_candidates(device_id_hex, device, kv)
+        self._log_hts_button_activity_candidates(device_id_hex, device, kv, from_body=from_body)
         # Internal temperature via HTS 0x02 (#229), for device families with no
         # gRPC temperature source (Curtain Outdoor Plus/Base). Additive: only
         # fills when the device doesn't already carry a temperature, so devices
@@ -1289,17 +1309,27 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     def _log_hts_button_activity_candidates(
-        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes], *, from_body: bool = False
     ) -> None:
         """DEBUG-log transitions of the Button activity-candidate keys (#348).
 
         Read-only by design — see `_HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS`. Logs
         only when a value *changes*, which is the whole point: the reading to
         falsify is that these keys track supervision pings rather than presses,
-        and that shows up as transitions on a Button nobody is touching. A
-        first sighting is recorded silently, because the boot snapshot re-reports
-        whatever the last press left behind and would otherwise look like a press
-        at every restart.
+        and that shows up as transitions on a Button nobody is touching.
+
+        A first sighting **in a body snapshot** is recorded silently, because
+        the snapshot re-reports whatever the last press left behind and would
+        otherwise look like a press at every restart.
+
+        A first sighting **in a delta**, for a key absent from a body row we
+        have already seen, is logged: such a key lives only in deltas, so there
+        is no baseline to swallow and that first sighting *is* the event. Before
+        the device's first body row arrives the two cases are indistinguishable,
+        so a delta seen that early is still recorded silently rather than
+        guessed at. Reported by @wip3out3r, whose first press went unlogged
+        because he pressed after a restart but before the key had ever appeared
+        in a body — a delta-only key on his hardware.
 
         Each 4-byte value is also rendered as a big-endian Unix epoch, so the log
         can be compared against the wall-clock moment of a press without anyone
@@ -1311,6 +1341,12 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Silent when the row carries none of the keys, so device families that
         don't report them add no log noise.
         """
+        # Recorded before the per-key loop, and for every device: a body row
+        # that carries *none* of the keys is exactly what proves they are
+        # delta-only on this firmware.
+        body_seen = device_id_hex in self._hts_button_activity_bodies_seen
+        if from_body:
+            self._hts_button_activity_bodies_seen.add(device_id_hex)
         for key in _HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS:
             value = kv.get(key)
             if value is None:
@@ -1319,7 +1355,12 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cache_key = (device_id_hex, key)
             previous = self._hts_button_activity.get(cache_key)
             self._hts_button_activity[cache_key] = current
-            if previous is None or previous == current:
+            if previous == current:
+                continue
+            if previous is None and (from_body or not body_seen):
+                # Baselining, not an event: either this is the snapshot itself,
+                # or no snapshot has arrived yet to tell us the key is
+                # delta-only.
                 continue
             _LOGGER.debug(
                 "HTS button probe: device=%s type=%s key=0x%02X %s -> %s (%s)",

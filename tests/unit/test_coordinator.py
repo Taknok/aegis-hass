@@ -2403,14 +2403,75 @@ class TestHtsButtonActivityProbe:
         # the wall-clock moment they pressed.
         assert "2026-07-28T05:23:09" in caplog.text
 
-    def test_first_sighting_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_first_sighting_in_a_body_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
         # The boot snapshot re-reports whatever the last press left behind;
         # logging it would look like a press at every restart.
         coordinator = _make_coordinator()
         coordinator.devices["313E5F32"] = self._make_device()
 
         with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
-            coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True
+            )
+
+        assert "HTS button probe" not in caplog.text
+
+    def test_first_sighting_of_a_delta_only_key_is_logged(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A key that never appears in a body has no baseline to swallow (#348).
+
+        @wip3out3r's first press produced no line at all: on his hardware the
+        key is delta-only, so its first sighting was silently recorded as a
+        baseline and the press was lost. Once a body row for the device has
+        arrived *without* the key, a later delta carrying it is an event.
+        """
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        # A body row for this device that carries neither candidate key — this
+        # is what establishes that the key is delta-only.
+        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x05: b"\x64"}, from_body=True)
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=False
+            )
+
+        assert "HTS button probe" in caplog.text
+        assert "key=0x39" in caplog.text
+
+    def test_a_delta_before_any_body_is_still_silent(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Without a body row we cannot tell a delta-only key from one we simply
+        # haven't baselined yet, so stay silent rather than guess a press.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=False
+            )
+
+        assert "HTS button probe" not in caplog.text
+
+    def test_a_body_carried_key_still_baselines_silently_after_a_body(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The regression guard for the fix: a key present in the body must not
+        # start logging its first sighting just because a body has been seen.
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = self._make_device()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            # Two consecutive bodies, same value — the untouched-Button case.
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True
+            )
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True
+            )
 
         assert "HTS button probe" not in caplog.text
 
@@ -2477,9 +2538,13 @@ class TestHtsButtonActivityProbe:
         coordinator.devices["313E5F32"] = self._make_device()
         coordinator.devices["313E63EC"] = replace(self._make_device(), id="313E63EC")
 
-        coordinator._on_hts_device_kv("0023F477", "313E5F32", {0x39: self.FIRST_PRESS})
+        coordinator._on_hts_device_kv(
+            "0023F477", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True
+        )
         with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
-            coordinator._on_hts_device_kv("0023F477", "313E63EC", {0x39: self.SECOND_PRESS})
+            coordinator._on_hts_device_kv(
+                "0023F477", "313E63EC", {0x39: self.SECOND_PRESS}, from_body=True
+            )
 
         assert "HTS button probe" not in caplog.text
 
