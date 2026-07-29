@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 import ssl
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from custom_components.aegis_ajax.api.hts.auth import (
     ConnectedResponse,
@@ -46,6 +46,27 @@ from custom_components.aegis_ajax.api.hts.protocol import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+
+class DeviceKvCallback(Protocol):
+    """Signature of the per-device kv callback the coordinator wires in.
+
+    A `Protocol` rather than a `Callable` alias because `from_body` has to be
+    keyword-only, which `Callable` can't express. It matters to the caller:
+    the same kv shape arrives both from a periodic body snapshot and from a
+    live delta, and a consumer that treats a key's first sighting as an event
+    needs to tell the two apart (#348).
+    """
+
+    def __call__(
+        self,
+        hub_id: str,
+        device_id_hex: str,
+        kv: dict[int, bytes],
+        *,
+        from_body: bool = False,
+    ) -> None: ...
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -234,7 +255,7 @@ class HtsClient:
         # client itself does not know which devices emit electrical
         # readings — it just forwards every non-hub kv block from a
         # STATUS/SETTINGS body and lets the coordinator filter by type.
-        self._on_device_kv: Callable[[str, str, dict[int, bytes]], None] | None = None
+        self._on_device_kv: DeviceKvCallback | None = None
         # Chime-event callback wired by the coordinator (#239). The hub emits a
         # `type=0x08` event frame the instant the hub-wide Chime is toggled
         # (including from the Ajax app); the client recognises that frame and
@@ -632,7 +653,7 @@ class HtsClient:
     async def listen(
         self,
         on_state_update: Callable[[str, HubNetworkState], None] | None = None,
-        on_device_kv: Callable[[str, str, dict[int, bytes]], None] | None = None,
+        on_device_kv: DeviceKvCallback | None = None,
         on_chime_event: Callable[[str, str, int | None], None] | None = None,
     ) -> None:
         """Main receive loop: ACK messages and dispatch UPDATES.
@@ -781,7 +802,7 @@ class HtsClient:
                     if not kvs:
                         continue
                     try:
-                        self._on_device_kv(hub_id, did.hex().upper(), kvs)
+                        self._on_device_kv(hub_id, did.hex().upper(), kvs, from_body=True)
                     except Exception:  # noqa: BLE001
                         _LOGGER.exception(
                             "on_device_kv callback raised for hub %s device %s",
@@ -911,7 +932,7 @@ class HtsClient:
                     if not kvs:
                         continue
                     try:
-                        self._on_device_kv(hub_id, did.hex().upper(), kvs)
+                        self._on_device_kv(hub_id, did.hex().upper(), kvs, from_body=False)
                     except Exception:  # noqa: BLE001
                         _LOGGER.exception(
                             "on_device_kv callback raised for hub %s device %s",
