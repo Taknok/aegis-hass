@@ -409,6 +409,59 @@ class TestParseDeviceReadings:
         )
         assert r == DeviceReadings(current_ma=40, power_consumed_wh=2409, voltage_v=231)
 
+    def test_relay_voltage_is_millivolts(self) -> None:
+        """A Relay reports 0x35 in millivolts, not volts (#325).
+
+        `relay.proto` declares `voltage_milli_volts = 0x35` while
+        `wall_switch.proto` / `socket.proto` declare `voltage_volts` at the
+        very same sub-key. 11671 is the raw value from the reporter's
+        12 V⎓-fed Relay, which the integration used to surface as
+        "11,671 V".
+        """
+        r = parse_device_readings(
+            "relay",
+            {DEVICE_KEY_VOLTAGE_V: b"\x2d\x97"},  # 11671 mV
+        )
+        assert r is not None
+        assert r.voltage_v == pytest.approx(11.671)
+
+    def test_relay_voltage_millivolts_on_mains_supply_too(self) -> None:
+        """The Relay's unit does not depend on how it is powered (#325).
+
+        The Ajax Relay accepts 7-24 V⎓ *or* 110-230 V~, which is why a
+        per-family rescale looked unsafe at first. The proto field name is
+        unconditional, so a mains-fed unit simply reports a larger number of
+        millivolts — 230 V arrives as 230000, not as 230.
+        """
+        r = parse_device_readings(
+            "relay",
+            {DEVICE_KEY_VOLTAGE_V: b"\x03\x82\x70"},  # 230000 mV
+        )
+        assert r is not None
+        assert r.voltage_v == pytest.approx(230.0)
+
+    def test_wall_switch_voltage_still_volts_after_relay_fix(self) -> None:
+        """Guard: the mV conversion must stay scoped to `relay` (#325).
+
+        Rescaling the shared WallSwitch/Socket map would turn 230 V into
+        0.23 V for every metering device out there.
+        """
+        for device_type in ("wall_switch", "socket", "socket_g"):
+            r = parse_device_readings(device_type, {DEVICE_KEY_VOLTAGE_V: b"\x00\xe6"})
+            assert r is not None, device_type
+            assert r.voltage_v == 230, device_type
+
+    def test_relay_fibra_base_voltage_left_unscaled(self) -> None:
+        """`relay_fibra_base` is deliberately NOT rescaled (#325).
+
+        There is no `relay_fibra*.proto` in `proto_src`, so its unit is
+        unobserved. Assuming it matches the Jeweller Relay would be a guess;
+        this test pins the decision so a future change is deliberate.
+        """
+        r = parse_device_readings("relay_fibra_base", {DEVICE_KEY_VOLTAGE_V: b"\x00\xe6"})
+        assert r is not None
+        assert r.voltage_v == 230
+
     def test_socket_partial_only_current(self) -> None:
         # Power-consumed sub-key may be absent on a freshly-installed device.
         r = parse_device_readings(

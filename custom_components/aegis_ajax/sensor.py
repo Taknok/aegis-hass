@@ -594,9 +594,11 @@ class AjaxDeviceCurrentSensor(_AjaxDeviceReadingsBase):
 class AjaxDeviceVoltageSensor(_AjaxDeviceReadingsBase):
     """Live line voltage reported by a WallSwitch / Socket-family device (V).
 
-    Reads the device-reported line voltage as a signed short, no
-    scaling. Older firmwares don't report it — the entity then
-    stays `unknown` until the device sends a reading.
+    The parser has already normalised the reading to volts — the raw
+    sub-key is whole volts on the WallSwitch/Socket families but
+    millivolts on the Jeweller Relay (#325). Older firmwares don't
+    report it at all — the entity then stays `unknown` until the device
+    sends a reading.
     """
 
     _attr_translation_key = "voltage"
