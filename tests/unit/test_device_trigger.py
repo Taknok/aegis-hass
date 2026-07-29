@@ -139,8 +139,15 @@ class TestAsyncAttachTrigger:
         }
         action = MagicMock()
         trigger_info = MagicMock()
+        # HA's own TRIGGER_SCHEMA is stubbed out: validating it needs a `hass`
+        # in the context (its template validator refuses to run outside the
+        # event loop), which says nothing about our wiring. Assert on the
+        # config we hand it instead.
         with (
             patch.object(device_trigger.dr, "async_get", return_value=registry),
+            patch.object(
+                device_trigger.event_trigger, "TRIGGER_SCHEMA", side_effect=lambda cfg: cfg
+            ),
             patch.object(device_trigger.event_trigger, "async_attach_trigger") as attach,
         ):
             await device_trigger.async_attach_trigger(hass, config, action, trigger_info)
