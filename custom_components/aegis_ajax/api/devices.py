@@ -126,6 +126,43 @@ def _build_object_type(device_type: str) -> Any:  # noqa: ANN401
     return obj
 
 
+def _log_empty_siren_settings(hub_device_id: str, hub_device: Any) -> None:  # noqa: ANN401
+    """DEBUG-report why a siren's settings snapshot yielded nothing (#354).
+
+    An empty result has three different causes needing three different fixes,
+    and the caller can't tell them apart from `{}` alone:
+
+    1. The `device` oneof case is one we don't model, so the whole sub-message
+       is undecodable — the snapshot arrives but reads as unset. This is what
+       kept the DoubleDeck / Fibra / S sirens unreadable before #354.
+    2. The case is modelled but carries no `common_siren_part`, i.e. this SKU
+       genuinely doesn't expose its settings on this stream.
+    3. The part is there but neither value is set.
+
+    Logging the case name plus whether the siren part is present separates all
+    three, which is exactly what a reporter's log has to answer before anyone
+    guesses at a fix. Mirrors the same probe on the temperature path (#229).
+    """
+    case = hub_device.WhichOneof("device") if hasattr(hub_device, "WhichOneof") else None
+    sub = getattr(hub_device, case, None) if case else None
+    has_siren_part: bool | None = None
+    if sub is not None and hasattr(sub, "HasField"):
+        try:
+            has_siren_part = sub.HasField("common_siren_part")
+        except (ValueError, TypeError):
+            # This SKU's message has no such field at all — distinct from
+            # having one that is unset, so report it as unknown rather than
+            # False.
+            has_siren_part = None
+    _LOGGER.debug(
+        "StreamHubDevice (siren settings) for %s carried no settings; "
+        "HubDevice oneof case=%r common_siren_part=%s",
+        hub_device_id,
+        case,
+        has_siren_part,
+    )
+
+
 def _encode_string_field(field_number: int, value: str) -> bytes:
     """Encode a protobuf string field (wire type 2)."""
     tag = (field_number << 3) | 2
@@ -342,7 +379,10 @@ class DevicesApi:
             if msg.HasField("success"):
                 if msg.success.WhichOneof("success") == "snapshot":
                     hub_device = msg.success.snapshot.hub_device
-                    return devices_parser.parse_hub_device_siren_settings(hub_device)
+                    settings = devices_parser.parse_hub_device_siren_settings(hub_device)
+                    if not settings:
+                        _log_empty_siren_settings(hub_device_id, hub_device)
+                    return settings
             elif msg.HasField("failure"):
                 _LOGGER.debug(
                     "StreamHubDevice (siren settings) failed for device %s: %s",
