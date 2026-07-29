@@ -5,7 +5,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from custom_components.aegis_ajax.const import ALL_EVENT_TYPES, HUB_EVENT_TAG_MAP
-from custom_components.aegis_ajax.event import AjaxDoorbellEvent, AjaxSecurityEvent
+from custom_components.aegis_ajax.event import (
+    AjaxButtonPressEvent,
+    AjaxDoorbellEvent,
+    AjaxSecurityEvent,
+)
 
 
 class TestAjaxSecurityEvent:
@@ -328,3 +332,64 @@ class TestNotificationEventParsing:
 
         result = AjaxNotificationListener._extract_event_raw(b"\x00\x01\x02")
         assert result is None
+
+
+class TestAjaxButtonPressEvent:
+    """Per-device Button control-mode press event (#348)."""
+
+    def _make_button_entity(self) -> AjaxButtonPressEvent:
+        coordinator = MagicMock()
+        coordinator.rooms = {}
+        coordinator.devices = {
+            "313E5F32": MagicMock(
+                id="313E5F32",
+                name="Boto",
+                device_type="button",
+                room_id=None,
+            ),
+        }
+        return AjaxButtonPressEvent(coordinator=coordinator, device_id="313E5F32")
+
+    def test_unique_id(self) -> None:
+        entity = self._make_button_entity()
+        assert entity.unique_id == "aegis_ajax_313E5F32_button_press_event"
+
+    def test_device_class_is_button(self) -> None:
+        from homeassistant.components.event import EventDeviceClass
+
+        entity = self._make_button_entity()
+        assert entity._attr_device_class == EventDeviceClass.BUTTON
+
+    def test_advertises_exactly_one_event_type(self) -> None:
+        # Short and long click are indistinguishable in everything the hub
+        # reports, so advertising two would imply a distinction that does not
+        # exist. See BUTTON_PRESS_EVENT_TYPE.
+        entity = self._make_button_entity()
+        assert entity.event_types == ["pressed"]
+
+    def test_handle_event_triggers_and_writes(self) -> None:
+        entity = self._make_button_entity()
+        entity._trigger_event = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+        entity.hass = MagicMock()
+
+        entity.handle_event("pressed", {"pressed_at": "2026-07-29T06:21:41+00:00"})
+
+        entity._trigger_event.assert_called_once_with(
+            "pressed", {"pressed_at": "2026-07-29T06:21:41+00:00"}
+        )
+        entity.async_write_ha_state.assert_called_once()
+
+    def test_handle_event_ignores_other_types(self) -> None:
+        entity = self._make_button_entity()
+        entity._trigger_event = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+
+        entity.handle_event("panic", {})
+
+        entity._trigger_event.assert_not_called()
+
+    def test_device_info_points_at_the_button(self) -> None:
+        entity = self._make_button_entity()
+        assert entity._attr_device_info is not None
+        assert ("aegis_ajax", "313E5F32") in entity._attr_device_info["identifiers"]

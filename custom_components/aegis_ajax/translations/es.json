@@ -305,6 +305,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Botón",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Pulsado"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

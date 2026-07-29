@@ -4005,3 +4005,157 @@ class TestHtsDeviceTemperature:
         coordinator._on_hts_device_kv("hub-1", "d1", {0x05: b"\x01"})
         assert "temperature" not in coordinator.devices["d1"].statuses
         coordinator.async_set_updated_data.assert_not_called()
+
+
+class TestButtonPressEvent:
+    """#348: the Button control-mode press event.
+
+    Values are the real ones from @raven2k24's capture. `0x39` is a big-endian
+    Unix epoch of the press; short and long click move it identically, so there
+    is one event type rather than two.
+    """
+
+    BOOT_VALUE = b"\x6a\x68\x82\x26"  # 2026-07-28T10:19:18Z — 20 h old at boot
+    FIRST_PRESS = b"\x6a\x69\x9b\xf5"  # 2026-07-29T06:21:41Z
+    SECOND_PRESS = b"\x6a\x69\x9c\x0c"  # 2026-07-29T06:22:04Z
+
+    def _setup(self, device_type: str = "button") -> tuple[AjaxCobrandedCoordinator, MagicMock]:  # noqa: F821
+        coordinator = _make_coordinator()
+        coordinator.devices["313E5F32"] = Device(
+            id="313E5F32",
+            hub_id="hub-1",
+            name="Boto",
+            device_type=device_type,
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+        entity = MagicMock()
+        coordinator.register_button_event_entity("313E5F32", entity)
+        return coordinator, entity
+
+    def test_a_press_fires_the_event_with_the_decoded_timestamp(self) -> None:
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS})
+
+        entity.handle_event.assert_called_once()
+        event_type, data = entity.handle_event.call_args[0]
+        assert event_type == "pressed"
+        assert data["device_id"] == "313E5F32"
+        assert data["pressed_at"].startswith("2026-07-29T06:21:41")
+
+    def test_the_boot_snapshot_does_not_fire(self) -> None:
+        """The value at boot was 20 hours old — announcing it would be a lie."""
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+
+        entity.handle_event.assert_not_called()
+
+    def test_an_unchanged_value_does_not_fire(self) -> None:
+        # The snapshot re-reports the same epoch every cycle; only a change is a
+        # press. Without this the entity would fire once a minute forever.
+        coordinator, entity = self._setup()
+
+        for _ in range(5):
+            coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True)
+
+        entity.handle_event.assert_not_called()
+
+    def test_consecutive_presses_each_fire(self) -> None:
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS})
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.SECOND_PRESS})
+
+        assert entity.handle_event.call_count == 2
+
+    def test_a_delta_and_the_lagging_snapshot_fire_only_once(self) -> None:
+        """The snapshot samples once a minute and repeats the delta's value.
+
+        Both paths share one cache, so whichever arrives first fires and the
+        other sees no change — otherwise every press would double-trigger.
+        """
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS})
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True)
+
+        assert entity.handle_event.call_count == 1
+
+    def test_a_press_seen_only_in_the_snapshot_still_fires(self) -> None:
+        # A missed delta must not lose the press outright; the snapshot catches
+        # it, just with a slightly older timestamp.
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS}, from_body=True)
+
+        entity.handle_event.assert_called_once()
+
+    def test_time_going_backwards_does_not_fire(self) -> None:
+        # A press can only produce a later timestamp. A lower one means
+        # something else is going on, so re-baseline instead of inventing an
+        # event.
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.SECOND_PRESS}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS})
+
+        entity.handle_event.assert_not_called()
+
+    def test_a_non_epoch_value_does_not_fire(self) -> None:
+        # On a StreetSiren the same sub-key is a 1-byte counter. Nothing that
+        # isn't a plausible epoch may reach the event.
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: b"\x05"}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: b"\x06"})
+
+        entity.handle_event.assert_not_called()
+
+    def test_another_device_family_does_not_fire(self) -> None:
+        """The gate that matters most: 0x39 means other things elsewhere.
+
+        On a DoorProtect Plus it is a roller-shutter-online flag that sits at a
+        constant value — read globally, an automation would fire off a door
+        sensor.
+        """
+        coordinator, entity = self._setup(device_type="door_protect_plus")
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS})
+
+        entity.handle_event.assert_not_called()
+
+    def test_a_press_with_no_entity_registered_still_advances_the_baseline(self) -> None:
+        # The entity may be disabled or not yet added. The next press must still
+        # fire rather than being swallowed as a baseline.
+        coordinator, _ = self._setup()
+        coordinator._button_event_entities.clear()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.FIRST_PRESS})
+
+        entity = MagicMock()
+        coordinator.register_button_event_entity("313E5F32", entity)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x39: self.SECOND_PRESS})
+
+        entity.handle_event.assert_called_once()
+
+    def test_the_0x40_key_is_not_wired_to_the_event(self) -> None:
+        # It is a hub-wide counter on sirens, not this device's activity.
+        coordinator, entity = self._setup()
+
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x40: self.BOOT_VALUE}, from_body=True)
+        coordinator._on_hts_device_kv("h", "313E5F32", {0x40: self.FIRST_PRESS})
+
+        entity.handle_event.assert_not_called()

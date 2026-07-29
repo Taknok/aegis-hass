@@ -738,6 +738,35 @@ DOORBELL_RING_EVENT_TYPE = "ring"
 # HA event_type for motion pushes; used to flip a device's motion sensor (#173).
 MOTION_EVENT_TYPE = "motion"
 
+# --- Button control-mode press event (#348) ------------------------------
+# A Button in *control* mode (as opposed to panic mode, which already fires
+# `panic`) produces no push and no gRPC status change. The only signal the hub
+# emits is HTS sub-key 0x39 on the Button's row: a big-endian Unix epoch of the
+# moment it was pressed.
+#
+# Evidence it is a press and not a supervision ping, from @raven2k24's captures
+# on a UTC+3 install (#348):
+#   - 14 presses produced 14 transitions, each within 1-2 s of the press;
+#   - 64 minutes and 61 snapshot cycles afterwards with no movement;
+#   - and the decisive one, which needs no log coverage at all: the value
+#     present at boot was 20 hours old. An Ajax peripheral pings its hub every
+#     12-36 minutes, so a contact-tracking key would have moved hundreds of
+#     times in that window. It moved zero.
+#
+# **Short and long click are indistinguishable** — both move only this key, to
+# the same kind of value — so this is one "pressed" event, not two. The hub does
+# not push control-mode presses at all, confirmed on an install with push
+# configured, so no richer source exists to tell them apart.
+#
+# Only the single Button is included. The DoubleButton is panic-only and its
+# reporter confirmed pressing it emits nothing at all. Keyfobs
+# (`space_control`) do not carry this key: a press there produced no 0x39
+# whatsoever on a 13-device install, so this must stay gated by device type —
+# the same sub-key means unrelated things on other families (on a DoorProtect
+# Plus it is a roller-shutter-online flag).
+BUTTON_PRESS_EVENT_TYPE = "pressed"
+BUTTON_PRESS_DEVICE_TYPES = frozenset({"button"})
+
 # Maps a DeviceCommand failure-oneof case (what the hub returned) to a
 # translated `exceptions.*` message key. Unmapped reasons fall back to
 # `command_failed`, which echoes the raw reason. Messages stay factual —

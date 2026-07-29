@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Pulsante",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Premuto"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

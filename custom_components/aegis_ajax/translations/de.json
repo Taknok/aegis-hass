@@ -289,6 +289,16 @@
                         }
                     }
                 }
+            },
+            "button_press": {
+                "name": "Taster",
+                "state_attributes": {
+                    "event_type": {
+                        "state": {
+                            "pressed": "Gedrückt"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {
