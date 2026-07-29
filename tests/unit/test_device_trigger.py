@@ -85,7 +85,9 @@ class TestAsyncGetTriggers:
 
 
 class TestEventTriggerConfig:
-    def test_builds_event_config_filtered_by_event_type(self) -> None:
+    def test_builds_event_config_filtered_by_event_type_and_hub(self) -> None:
+        # #358: without the hub_id filter, a trigger scoped to one hub fires
+        # for arm/disarm events of every Ajax system in the installation.
         from custom_components.aegis_ajax import device_trigger
 
         config = {
@@ -94,11 +96,57 @@ class TestEventTriggerConfig:
             "device_id": "ha-device-xyz",
             "type": "doorbell_pressed",
         }
-        event_config = device_trigger._event_trigger_config(config)
+        event_config = device_trigger._event_trigger_config(config, hub_id="hub-1")
 
         assert event_config["platform"] == "event"
         assert event_config["event_type"] == f"{DOMAIN}_event"
-        assert event_config["event_data"] == {"event_type": "doorbell_pressed"}
+        assert event_config["event_data"] == {
+            "event_type": "doorbell_pressed",
+            "hub_id": "hub-1",
+        }
+
+    def test_unresolvable_hub_falls_back_to_event_type_only(self) -> None:
+        # A deleted HA device can no longer be resolved to a hub. Keep the
+        # trigger attached (old behaviour) rather than break the automation.
+        from custom_components.aegis_ajax import device_trigger
+
+        config = {
+            "platform": "device",
+            "domain": DOMAIN,
+            "device_id": "ghost",
+            "type": "armed",
+        }
+        event_config = device_trigger._event_trigger_config(config, hub_id=None)
+
+        assert event_config["event_data"] == {"event_type": "armed"}
+
+
+class TestAsyncAttachTrigger:
+    @pytest.mark.asyncio
+    async def test_attach_filters_on_the_devices_own_hub(self) -> None:
+        # End-to-end wiring for #358: the HA device registry id in the
+        # automation config must resolve to the aegis hub id and land in the
+        # delegated event trigger's event_data filter.
+        from custom_components.aegis_ajax import device_trigger
+
+        hass = _hass_with_hub("hub-1")
+        registry = _registry_returning({(DOMAIN, "hub-1")})
+        config = {
+            "platform": "device",
+            "domain": DOMAIN,
+            "device_id": "ha-device-xyz",
+            "type": "armed",
+        }
+        action = MagicMock()
+        trigger_info = MagicMock()
+        with (
+            patch.object(device_trigger.dr, "async_get", return_value=registry),
+            patch.object(device_trigger.event_trigger, "async_attach_trigger") as attach,
+        ):
+            await device_trigger.async_attach_trigger(hass, config, action, trigger_info)
+
+        event_config = attach.call_args[0][1]
+        assert event_config["event_data"] == {"event_type": "armed", "hub_id": "hub-1"}
 
 
 class TestTriggerSchema:
