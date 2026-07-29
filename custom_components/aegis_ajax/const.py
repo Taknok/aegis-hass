@@ -274,23 +274,41 @@ DEFAULT_BYPASS_SWITCHES = BYPASS_SWITCHES_AUTO
 # `permission_denied` on the bypass command.
 BYPASS_REQUIRED_PERMISSION = "DEVICE_EDIT"
 
-# --- Siren settings entities (#310) -------------------------------------
+# --- Siren settings entities (#310, #354) -------------------------------
 # Siren device families whose rich `StreamHubDevice` snapshot embeds a
 # writable `common_siren_part.siren_settings`. This is exactly the set of siren
 # `device` oneof cases our generated `HubDevice` proto models (verified: each
-# embeds `common_siren_part`). Other siren SKUs the integration recognises
-# elsewhere (`street_siren_plus`, `street_siren_fibra`, `street_siren_s`,
-# `street_siren_double_deck*`, …) are NOT in that proto oneof, so streaming
-# their snapshot yields an unknown case and no settings can be read — the same
-# proto-drift limitation as the outdoor curtain temperatures (#229). They are
-# deliberately excluded so we don't create permanently-empty entities; extend
-# this set only alongside the matching proto oneof case. The settings refresh
-# only streams the snapshot for these types, and the `number`/`select`
-# platforms create their entities for exactly these device types.
+# embeds `common_siren_part`) — a SKU missing from that oneof decodes as an
+# unknown case, so no settings can be read for it and creating its entities
+# would leave them permanently empty. Keep this set and the proto oneof in
+# step: extend one only alongside the other.
+#
+# The DoubleDeck / Fibra / S variants were added in #354. They carry *only*
+# `common_siren_part` on this API — no temperature, tamper or battery part —
+# which is why their internal temperature still comes from HTS 0x02 (see
+# HTS_TEMPERATURE_DEVICE_TYPES) rather than from this snapshot.
+#
+# Note the write path does not depend on any of this: `UpdateHubDevice`
+# addresses the device by `ObjectType`, so a SKU absent from the oneof was
+# always writable — it was only unreadable.
+#
+# `home_siren_plus` is intentionally absent: the proto now models that oneof
+# case, but `ObjectType` has no `home_siren_plus`, so `parse_device` can never
+# produce that device_type and listing it here would be dead weight. Add it if
+# and when the ObjectType appears.
+#
+# The settings refresh only streams the snapshot for these types, and the
+# `number`/`select` platforms create their entities for exactly these types.
 SIREN_DEVICE_TYPES = frozenset(
     {
         "street_siren",
         "street_siren_plus_g3",
+        "street_siren_s",
+        "street_siren_fibra",
+        "street_siren_plus_fibra",
+        "street_siren_double_deck",
+        "street_siren_s_double_deck",
+        "street_siren_double_deck_fibra",
         "home_siren",
         "home_siren_g3",
         "home_siren_s",

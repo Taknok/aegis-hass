@@ -55,6 +55,13 @@ class HubDevice(_message.Message):
     MOTION_PROTECT_G3_FIELD_NUMBER: _builtins.int
     MOTION_PROTECT_PLUS_G3_FIELD_NUMBER: _builtins.int
     SMART_LOCK_YALE_FIELD_NUMBER: _builtins.int
+    STREET_SIREN_S_FIELD_NUMBER: _builtins.int
+    STREET_SIREN_DOUBLE_DECK_FIELD_NUMBER: _builtins.int
+    STREET_SIREN_S_DOUBLE_DECK_FIELD_NUMBER: _builtins.int
+    STREET_SIREN_FIBRA_FIELD_NUMBER: _builtins.int
+    STREET_SIREN_DOUBLE_DECK_FIBRA_FIELD_NUMBER: _builtins.int
+    STREET_SIREN_PLUS_FIBRA_FIELD_NUMBER: _builtins.int
+    HOME_SIREN_PLUS_FIELD_NUMBER: _builtins.int
     @_builtins.property
     def door_protect(self) -> _door_protect_pb2.DoorProtect: ...
     @_builtins.property
@@ -107,6 +114,27 @@ class HubDevice(_message.Message):
     def motion_protect_plus_g3(self) -> _motion_protect_pb2.MotionProtectPlusG3: ...
     @_builtins.property
     def smart_lock_yale(self) -> _smart_lock_pb2.SmartLockYale: ...
+    @_builtins.property
+    def street_siren_s(self) -> _street_siren_pb2.StreetSirenS:
+        """The remaining siren SKUs (#354). Cases 27-61 and 69+ exist upstream for
+        other device families but are not modelled here yet — an unmodelled case
+        decodes as an unknown oneof, which is what kept these sirens' settings
+        unreadable. Only the siren block is filled in; extend the rest alongside
+        the device families that need it.
+        """
+
+    @_builtins.property
+    def street_siren_double_deck(self) -> _street_siren_pb2.StreetSirenDoubleDeck: ...
+    @_builtins.property
+    def street_siren_s_double_deck(self) -> _street_siren_pb2.StreetSirenSDoubleDeck: ...
+    @_builtins.property
+    def street_siren_fibra(self) -> _street_siren_pb2.StreetSirenFibra: ...
+    @_builtins.property
+    def street_siren_double_deck_fibra(self) -> _street_siren_pb2.StreetSirenDoubleDeckFibra: ...
+    @_builtins.property
+    def street_siren_plus_fibra(self) -> _street_siren_pb2.StreetSirenPlusFibra: ...
+    @_builtins.property
+    def home_siren_plus(self) -> _home_siren_pb2.HomeSirenPlus: ...
     def __init__(
         self,
         *,
@@ -136,12 +164,19 @@ class HubDevice(_message.Message):
         motion_protect_g3: _motion_protect_pb2.MotionProtectG3 | None = ...,
         motion_protect_plus_g3: _motion_protect_pb2.MotionProtectPlusG3 | None = ...,
         smart_lock_yale: _smart_lock_pb2.SmartLockYale | None = ...,
+        street_siren_s: _street_siren_pb2.StreetSirenS | None = ...,
+        street_siren_double_deck: _street_siren_pb2.StreetSirenDoubleDeck | None = ...,
+        street_siren_s_double_deck: _street_siren_pb2.StreetSirenSDoubleDeck | None = ...,
+        street_siren_fibra: _street_siren_pb2.StreetSirenFibra | None = ...,
+        street_siren_double_deck_fibra: _street_siren_pb2.StreetSirenDoubleDeckFibra | None = ...,
+        street_siren_plus_fibra: _street_siren_pb2.StreetSirenPlusFibra | None = ...,
+        home_siren_plus: _home_siren_pb2.HomeSirenPlus | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["device", b"device", "door_protect", b"door_protect", "door_protect_s", b"door_protect_s", "double_button", b"double_button", "en54_a", b"en54_a", "en54_h", b"en54_h", "en54_h_a", b"en54_h_a", "en54_h_v", b"en54_h_v", "en54_h_va", b"en54_h_va", "en54_hs_va", b"en54_hs_va", "en54_s", b"en54_s", "en54_s_a", b"en54_s_a", "en54_s_v", b"en54_s_v", "en54_v", b"en54_v", "en54_va", b"en54_va", "home_siren", b"home_siren", "home_siren_fibra", b"home_siren_fibra", "home_siren_g3", b"home_siren_g3", "home_siren_s", b"home_siren_s", "motion_protect", b"motion_protect", "motion_protect_curtain_outdoor_mini", b"motion_protect_curtain_outdoor_mini", "motion_protect_g3", b"motion_protect_g3", "motion_protect_plus_g3", b"motion_protect_plus_g3", "motion_protect_s", b"motion_protect_s", "smart_lock_yale", b"smart_lock_yale", "street_siren", b"street_siren", "street_siren_plus_g3", b"street_siren_plus_g3"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["device", b"device", "door_protect", b"door_protect", "door_protect_s", b"door_protect_s", "double_button", b"double_button", "en54_a", b"en54_a", "en54_h", b"en54_h", "en54_h_a", b"en54_h_a", "en54_h_v", b"en54_h_v", "en54_h_va", b"en54_h_va", "en54_hs_va", b"en54_hs_va", "en54_s", b"en54_s", "en54_s_a", b"en54_s_a", "en54_s_v", b"en54_s_v", "en54_v", b"en54_v", "en54_va", b"en54_va", "home_siren", b"home_siren", "home_siren_fibra", b"home_siren_fibra", "home_siren_g3", b"home_siren_g3", "home_siren_plus", b"home_siren_plus", "home_siren_s", b"home_siren_s", "motion_protect", b"motion_protect", "motion_protect_curtain_outdoor_mini", b"motion_protect_curtain_outdoor_mini", "motion_protect_g3", b"motion_protect_g3", "motion_protect_plus_g3", b"motion_protect_plus_g3", "motion_protect_s", b"motion_protect_s", "smart_lock_yale", b"smart_lock_yale", "street_siren", b"street_siren", "street_siren_double_deck", b"street_siren_double_deck", "street_siren_double_deck_fibra", b"street_siren_double_deck_fibra", "street_siren_fibra", b"street_siren_fibra", "street_siren_plus_fibra", b"street_siren_plus_fibra", "street_siren_plus_g3", b"street_siren_plus_g3", "street_siren_s", b"street_siren_s", "street_siren_s_double_deck", b"street_siren_s_double_deck"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["device", b"device", "door_protect", b"door_protect", "door_protect_s", b"door_protect_s", "double_button", b"double_button", "en54_a", b"en54_a", "en54_h", b"en54_h", "en54_h_a", b"en54_h_a", "en54_h_v", b"en54_h_v", "en54_h_va", b"en54_h_va", "en54_hs_va", b"en54_hs_va", "en54_s", b"en54_s", "en54_s_a", b"en54_s_a", "en54_s_v", b"en54_s_v", "en54_v", b"en54_v", "en54_va", b"en54_va", "home_siren", b"home_siren", "home_siren_fibra", b"home_siren_fibra", "home_siren_g3", b"home_siren_g3", "home_siren_s", b"home_siren_s", "motion_protect", b"motion_protect", "motion_protect_curtain_outdoor_mini", b"motion_protect_curtain_outdoor_mini", "motion_protect_g3", b"motion_protect_g3", "motion_protect_plus_g3", b"motion_protect_plus_g3", "motion_protect_s", b"motion_protect_s", "smart_lock_yale", b"smart_lock_yale", "street_siren", b"street_siren", "street_siren_plus_g3", b"street_siren_plus_g3"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["device", b"device", "door_protect", b"door_protect", "door_protect_s", b"door_protect_s", "double_button", b"double_button", "en54_a", b"en54_a", "en54_h", b"en54_h", "en54_h_a", b"en54_h_a", "en54_h_v", b"en54_h_v", "en54_h_va", b"en54_h_va", "en54_hs_va", b"en54_hs_va", "en54_s", b"en54_s", "en54_s_a", b"en54_s_a", "en54_s_v", b"en54_s_v", "en54_v", b"en54_v", "en54_va", b"en54_va", "home_siren", b"home_siren", "home_siren_fibra", b"home_siren_fibra", "home_siren_g3", b"home_siren_g3", "home_siren_plus", b"home_siren_plus", "home_siren_s", b"home_siren_s", "motion_protect", b"motion_protect", "motion_protect_curtain_outdoor_mini", b"motion_protect_curtain_outdoor_mini", "motion_protect_g3", b"motion_protect_g3", "motion_protect_plus_g3", b"motion_protect_plus_g3", "motion_protect_s", b"motion_protect_s", "smart_lock_yale", b"smart_lock_yale", "street_siren", b"street_siren", "street_siren_double_deck", b"street_siren_double_deck", "street_siren_double_deck_fibra", b"street_siren_double_deck_fibra", "street_siren_fibra", b"street_siren_fibra", "street_siren_plus_fibra", b"street_siren_plus_fibra", "street_siren_plus_g3", b"street_siren_plus_g3", "street_siren_s", b"street_siren_s", "street_siren_s_double_deck", b"street_siren_s_double_deck"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType_device: _TypeAlias = _typing.Literal["door_protect", "door_protect_s", "double_button", "en54_a", "en54_va", "en54_v", "en54_h_va", "en54_hs_va", "en54_h", "en54_s", "en54_s_v", "en54_s_a", "en54_h_v", "en54_h_a", "motion_protect", "motion_protect_s", "home_siren_fibra", "home_siren", "street_siren", "street_siren_plus_g3", "motion_protect_curtain_outdoor_mini", "home_siren_g3", "home_siren_s", "motion_protect_g3", "motion_protect_plus_g3", "smart_lock_yale"]  # noqa: Y015
+    _WhichOneofReturnType_device: _TypeAlias = _typing.Literal["door_protect", "door_protect_s", "double_button", "en54_a", "en54_va", "en54_v", "en54_h_va", "en54_hs_va", "en54_h", "en54_s", "en54_s_v", "en54_s_a", "en54_h_v", "en54_h_a", "motion_protect", "motion_protect_s", "home_siren_fibra", "home_siren", "street_siren", "street_siren_plus_g3", "motion_protect_curtain_outdoor_mini", "home_siren_g3", "home_siren_s", "motion_protect_g3", "motion_protect_plus_g3", "smart_lock_yale", "street_siren_s", "street_siren_double_deck", "street_siren_s_double_deck", "street_siren_fibra", "street_siren_double_deck_fibra", "street_siren_plus_fibra", "home_siren_plus"]  # noqa: Y015
     _WhichOneofArgType_device: _TypeAlias = _typing.Literal["device", b"device"]  # noqa: Y015
     def WhichOneof(self, oneof_group: _WhichOneofArgType_device) -> _WhichOneofReturnType_device | None: ...
 

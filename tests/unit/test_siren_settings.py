@@ -20,6 +20,7 @@ from custom_components.aegis_ajax.api.devices_parser import parse_hub_device_sir
 from custom_components.aegis_ajax.api.models import Device, DeviceCommand
 from custom_components.aegis_ajax.const import (
     SIREN_ALARM_DURATION_KEY,
+    SIREN_DEVICE_TYPES,
     SIREN_VOLUME_LEVEL_KEY,
     DeviceState,
 )
@@ -83,6 +84,78 @@ def _make_device(
         statuses=statuses,
         battery=None,
     )
+
+
+class TestSirenSkuCoverage:
+    """#354: the SKUs whose oneof case the HubDevice proto used to be missing.
+
+    A SKU absent from the `device` oneof decodes as an unknown case, so its
+    settings were unreadable and its entities would have sat permanently empty
+    — which is why they were excluded from `SIREN_DEVICE_TYPES`.
+    """
+
+    NEW_SKUS = (
+        "street_siren_s",
+        "street_siren_double_deck",
+        "street_siren_s_double_deck",
+        "street_siren_fibra",
+        "street_siren_double_deck_fibra",
+        "street_siren_plus_fibra",
+    )
+
+    @staticmethod
+    def _hub_device(oneof_name: str, *, alarm_duration: int, volume_level: int) -> Message:
+        from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device import hub_device_pb2
+
+        hub_device = hub_device_pb2.HubDevice()
+        settings = getattr(hub_device, oneof_name).common_siren_part.siren_settings
+        settings.alarm_duration = alarm_duration
+        settings.siren_volume_level = volume_level
+        return hub_device
+
+    @pytest.mark.parametrize("oneof_name", NEW_SKUS)
+    def test_settings_survive_a_serialise_round_trip(self, oneof_name: str) -> None:
+        """Decode from the wire, not just from a locally-built message.
+
+        Building the message in-process would pass even if the oneof case were
+        missing from the *compiled* descriptor, which is the thing under test.
+        """
+        from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device import hub_device_pb2
+
+        raw = self._hub_device(oneof_name, alarm_duration=90, volume_level=18).SerializeToString()
+        decoded = hub_device_pb2.HubDevice()
+        decoded.ParseFromString(raw)
+
+        assert decoded.WhichOneof("device") == oneof_name
+        assert parse_hub_device_siren_settings(decoded) == {
+            SIREN_ALARM_DURATION_KEY: 90,
+            SIREN_VOLUME_LEVEL_KEY: 18,
+        }
+
+    @pytest.mark.parametrize("device_type", NEW_SKUS)
+    def test_device_type_is_in_siren_device_types(self, device_type: str) -> None:
+        """The proto oneof and the entity gate have to move together."""
+        assert device_type in SIREN_DEVICE_TYPES
+
+    @pytest.mark.parametrize("device_type", sorted(SIREN_DEVICE_TYPES))
+    def test_every_gated_type_is_a_real_object_type(self, device_type: str) -> None:
+        """A device_type that `ObjectType` doesn't know can never be produced.
+
+        `parse_device` derives `device_type` from the `ObjectType` oneof, and
+        the write path turns it back into one, so an entry here that has no
+        matching ObjectType would be dead weight at best and a write error at
+        worst. This is what keeps `home_siren_plus` out of the set.
+        """
+        from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels import object_type_pb2
+
+        assert hasattr(object_type_pb2.ObjectType(), device_type)
+
+    @pytest.mark.parametrize("device_type", sorted(SIREN_DEVICE_TYPES))
+    def test_every_gated_type_can_be_decoded(self, device_type: str) -> None:
+        """Guard against the inverse drift: gated here but missing from the oneof."""
+        from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device import hub_device_pb2
+
+        assert hub_device_pb2.HubDevice.DESCRIPTOR.fields_by_name.get(device_type) is not None
 
 
 class TestParseSirenSettings:
