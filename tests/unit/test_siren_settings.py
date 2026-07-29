@@ -233,6 +233,98 @@ class TestGetHubDeviceSirenSettings:
         assert result == {SIREN_ALARM_DURATION_KEY: 60, SIREN_VOLUME_LEVEL_KEY: 1}
 
     @pytest.mark.asyncio
+    async def test_empty_snapshot_reports_the_oneof_case(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """#354: `{}` alone can't say which of three causes was hit.
+
+        nimahel's DoubleDeck reads `unknown` on `1.15.1-beta.6` even though the
+        oneof case is now modelled and writes reach the hub. The log has to name
+        the case the server actually sent and whether it carried a siren part,
+        or the next step is guesswork.
+        """
+        from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device import (
+            hub_device_pb2,
+            street_siren_pb2,
+        )
+
+        client = MagicMock()
+        client._get_channel.return_value = MagicMock()
+        client._session.get_call_metadata.return_value = []
+        api = DevicesApi(client)
+
+        msg = MagicMock()
+        msg.HasField.side_effect = lambda field: field == "success"
+        msg.success.WhichOneof.return_value = "snapshot"
+        # A modelled case whose siren part is simply absent.
+        msg.success.snapshot.hub_device = hub_device_pb2.HubDevice(
+            street_siren_double_deck=street_siren_pb2.StreetSirenDoubleDeck()
+        )
+
+        with (
+            caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.api.devices"),
+            _patch_stream_hub_device(_stub_yielding(msg)),
+        ):
+            result = await api.get_hub_device_siren_settings("hub-1", "30EA219B")
+
+        assert result == {}
+        assert "carried no settings" in caplog.text
+        assert "case='street_siren_double_deck'" in caplog.text
+        assert "common_siren_part=False" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_empty_snapshot_reports_an_unmodelled_case_as_none(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The pre-#354 shape: nothing decodes, so there is no case at all. This
+        # is the reading that says "extend the proto", as opposed to "this SKU
+        # doesn't expose settings here".
+        from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device import hub_device_pb2
+
+        client = MagicMock()
+        client._get_channel.return_value = MagicMock()
+        client._session.get_call_metadata.return_value = []
+        api = DevicesApi(client)
+
+        msg = MagicMock()
+        msg.HasField.side_effect = lambda field: field == "success"
+        msg.success.WhichOneof.return_value = "snapshot"
+        msg.success.snapshot.hub_device = hub_device_pb2.HubDevice()
+
+        with (
+            caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.api.devices"),
+            _patch_stream_hub_device(_stub_yielding(msg)),
+        ):
+            result = await api.get_hub_device_siren_settings("hub-1", "30EA219B")
+
+        assert result == {}
+        assert "case=None" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_populated_snapshot_logs_nothing(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The probe must stay silent on the healthy path, or it becomes noise on
+        # every one of the 900 s sweeps.
+        client = MagicMock()
+        client._get_channel.return_value = MagicMock()
+        client._session.get_call_metadata.return_value = []
+        api = DevicesApi(client)
+
+        msg = MagicMock()
+        msg.HasField.side_effect = lambda field: field == "success"
+        msg.success.WhichOneof.return_value = "snapshot"
+        msg.success.snapshot.hub_device = _street_siren(alarm_duration=60, volume_level=1)
+
+        with (
+            caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.api.devices"),
+            _patch_stream_hub_device(_stub_yielding(msg)),
+        ):
+            await api.get_hub_device_siren_settings("hub-1", "30EA219B")
+
+        assert "carried no settings" not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_returns_empty_on_failure_message(self) -> None:
         client = MagicMock()
         client._get_channel.return_value = MagicMock()
