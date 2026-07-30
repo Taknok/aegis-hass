@@ -433,13 +433,88 @@ def _walk_wire_format(raw: bytes, candidates: list[bytes], depth: int) -> None:
             return
 
 
-def _extract_source_info(raw: bytes) -> dict[str, Any]:
-    """Extract device source information from raw protobuf bytes.
+# `NotificationContent` oneof case → the source field(s) it carries, in
+# preference order. Mirrors `_CONTENT_TAG_MAPS` and exists for the same
+# reason: all four `*NotificationSource` messages share an identical wire
+# layout (`1 type` varint, `2 id` string, `3 name` string), so scanning for
+# one and finding another succeeds silently and translates the type with the
+# wrong vocabulary (#367). Only the container says which message it is.
+#
+# `space_notification_content` carries both: `space_source` names who or what
+# acted (a member, a keyfob, a scenario), `hub_source` the hub. Prefer the
+# former — it is the one that answers "who armed this?" (#362, #359).
+_CONTENT_SOURCE_FIELDS: dict[str, tuple[str, ...]] = {
+    "hub_notification_content": ("source",),
+    "space_notification_content": ("space_source", "hub_source"),
+    "video_notification_content": ("source",),
+    "smart_lock_notification_content": ("source",),
+}
 
-    Scans for HubNotificationSource by looking for the field pattern
-    (type varint + id string + name string) and attempting proto parsing
-    at each potential start position.
+
+def _source_info_from_message(source: Any) -> dict[str, Any] | None:  # noqa: ANN401
+    """Render one `*NotificationSource` message, or None if it carries nothing.
+
+    The vocabulary is read off the message's **own** descriptor rather than a
+    hard-coded table, so each source is necessarily translated with its own
+    enum and the four can never be crossed again.
     """
+    if not (source.name and source.id and source.type > 0):
+        return None
+    enum_type = source.DESCRIPTOR.fields_by_name["type"].enum_type
+    value = enum_type.values_by_number.get(source.type) if enum_type else None
+    result: dict[str, Any] = {
+        "device_name": source.name,
+        "device_id": source.id,
+        "device_type": value.name if value else str(source.type),
+    }
+    room_name = getattr(source, "room_name", "")
+    if room_name:
+        result["room_name"] = room_name
+    return result
+
+
+def _source_info_from_dispatch(raw: bytes) -> dict[str, Any] | None:
+    """Read the source from the container that identifies its vocabulary.
+
+    Returns None when the payload isn't a typed dispatch notification, so the
+    caller falls back to the legacy scan. Returns `{}` — not None — for a
+    recognised content that carries no usable source: a known container is
+    authoritative, and rescanning it is how a neighbouring message gets
+    mistaken for the source in the first place.
+    """
+    notification = _dispatch_notification(raw)
+    if notification is None or not notification.HasField("content"):
+        return None
+    content_case = notification.content.WhichOneof("content")
+    if not content_case:
+        return None
+    field_names = _CONTENT_SOURCE_FIELDS.get(content_case)
+    if field_names is None:
+        # Company / accounting / blank content have no source at all.
+        return {} if content_case in _UNMAPPED_CONTENT_CASES else None
+    typed_content = getattr(notification.content, content_case)
+    for field_name in field_names:
+        try:
+            if not typed_content.HasField(field_name):
+                continue
+        except ValueError:  # pragma: no cover - field absent from this build
+            continue
+        info = _source_info_from_message(getattr(typed_content, field_name))
+        if info is not None:
+            return info
+    return {}
+
+
+def _extract_source_info(raw: bytes) -> dict[str, Any]:
+    """Extract the source (device, person, scenario) that caused an event.
+
+    Reads it structurally from the notification content when the payload is a
+    typed dispatch message, and only otherwise falls back to the legacy scan
+    below, which looks for a `HubNotificationSource` anywhere in the bytes.
+    """
+    structured = _source_info_from_dispatch(raw)
+    if structured is not None:
+        return structured
     try:
         from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.commonmodels.notification.hub import (  # noqa: PLC0415, E501
             source_pb2,
