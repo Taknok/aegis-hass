@@ -346,6 +346,11 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Sirens with a post-write settings confirm read in flight (single-flight
         # per device; see `schedule_siren_settings_confirm`).
         self._siren_confirm_pending: set[str] = set()
+        # Sirens whose settings read has already failed and been warned about,
+        # so a permanently unreadable one is reported once instead of every
+        # 900 s sweep (#354). Cleared on a successful read so a device that
+        # recovers and breaks again warns again.
+        self._siren_settings_failed: set[str] = set()
         # Devices with a post-write bypass confirm read in flight (single-flight
         # per device; see `schedule_bypass_confirm`).
         self._bypass_confirm_pending: set[str] = set()
@@ -486,6 +491,34 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._on_session_persist(token, user_hex_id)
             except Exception:  # noqa: BLE001
                 _LOGGER.debug("Failed to persist refreshed session", exc_info=True)
+
+    @staticmethod
+    def _describe_rpc_error(exc: Exception) -> str:
+        """One-line cause for a failed RPC: type, plus gRPC status if any.
+
+        Handlers that log a failure with `exc_info=True` alone put the only
+        discriminating fact — the status code — at the *end* of a traceback,
+        which is precisely the part a reporter's log viewer truncates (#354).
+        Putting it on the message line survives the paste.
+        """
+        code = getattr(exc, "code", None)
+        if callable(code):
+            try:
+                value = code()
+            except Exception:  # noqa: BLE001
+                value = None
+            name = getattr(value, "name", None)
+            if name:
+                details = getattr(exc, "details", None)
+                detail_text = ""
+                if callable(details):
+                    try:
+                        detail_text = details() or ""
+                    except Exception:  # noqa: BLE001
+                        detail_text = ""
+                suffix = f" ({detail_text})" if detail_text else ""
+                return f"{type(exc).__name__}/{name}{suffix}"
+        return f"{type(exc).__name__}: {exc}"
 
     @staticmethod
     def _is_unauthenticated_error(exc: Exception) -> bool:
@@ -848,9 +881,30 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             settings = await self._devices_api.get_hub_device_siren_settings(
                 device.hub_id, device_id
             )
-        except Exception:  # noqa: BLE001
-            _LOGGER.debug("Failed to fetch siren settings for device %s", device_id, exc_info=True)
+        except Exception as exc:  # noqa: BLE001
+            # First failure per device is user-visible: its Siren volume and
+            # Alarm duration entities sit on `unknown` until this succeeds, and
+            # at HA's default level a DEBUG-only line makes that undiagnosable
+            # without first asking the reporter to enable debug (#354). Repeats
+            # drop to DEBUG so a permanently unreadable siren doesn't spam.
+            first_failure = device_id not in self._siren_settings_failed
+            self._siren_settings_failed.add(device_id)
+            _LOGGER.log(
+                logging.WARNING if first_failure else logging.DEBUG,
+                "Failed to fetch siren settings for device %s: %s%s",
+                device_id,
+                self._describe_rpc_error(exc),
+                (
+                    " — its Siren volume and Alarm duration will show as unknown "
+                    "until a read succeeds. Further failures for this device are "
+                    "logged at debug level."
+                    if first_failure
+                    else ""
+                ),
+                exc_info=True,
+            )
             return False
+        self._siren_settings_failed.discard(device_id)
         if not settings:
             return False
         current = self.devices.get(device_id)

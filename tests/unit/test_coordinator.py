@@ -4159,3 +4159,96 @@ class TestButtonPressEvent:
         coordinator._on_hts_device_kv("h", "313E5F32", {0x40: self.FIRST_PRESS})
 
         entity.handle_event.assert_not_called()
+
+
+class TestSirenSettingsFetchFailureLogging:
+    """A failed siren-settings read must name its own cause (#354).
+
+    nimahel's DoubleDeck returns `unknown` while *writes* reach the hub, and
+    the beta.7 probe added for it (`carried no settings`) never appeared in
+    their log — because it sits on the empty-snapshot branch and the read
+    never gets that far: the RPC itself raises. The handler logged the
+    exception only via `exc_info`, so the one fact needed to tell a
+    permission denial from a timeout lives in a traceback tail that a
+    reporter's log viewer truncates before the exception line.
+    """
+
+    @pytest.mark.asyncio
+    async def test_grpc_failure_names_the_status_code_on_the_message_line(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices = {"d1": _make_device("d1")}
+        coordinator._devices_api = MagicMock()
+
+        class _FakeCode:
+            name = "PERMISSION_DENIED"
+            value = (7, "permission denied")
+
+        class _FakeAioRpcError(Exception):
+            def code(self) -> _FakeCode:
+                return _FakeCode()
+
+            def details(self) -> str:
+                return "device edit not allowed"
+
+        coordinator._devices_api.get_hub_device_siren_settings = AsyncMock(
+            side_effect=_FakeAioRpcError()
+        )
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.aegis_ajax.coordinator"):
+            changed = await coordinator._async_fetch_and_merge_siren_settings("d1")
+
+        assert changed is False
+        message = next(
+            (r.getMessage() for r in caplog.records if "siren settings" in r.getMessage()), ""
+        )
+        assert "PERMISSION_DENIED" in message, f"status code missing from log line: {message!r}"
+
+    @pytest.mark.asyncio
+    async def test_non_grpc_failure_names_the_exception_type(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A plain exception has no `code()`; the type still has to show."""
+        coordinator = _make_coordinator()
+        coordinator.devices = {"d1": _make_device("d1")}
+        coordinator._devices_api = MagicMock()
+        coordinator._devices_api.get_hub_device_siren_settings = AsyncMock(
+            side_effect=TimeoutError("timed out")
+        )
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.aegis_ajax.coordinator"):
+            changed = await coordinator._async_fetch_and_merge_siren_settings("d1")
+
+        assert changed is False
+        message = next(
+            (r.getMessage() for r in caplog.records if "siren settings" in r.getMessage()), ""
+        )
+        assert "TimeoutError" in message, f"exception type missing from log line: {message!r}"
+
+    @pytest.mark.asyncio
+    async def test_first_failure_per_device_warns_then_stays_quiet(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The user-visible symptom is an entity stuck on `unknown` forever,
+        and DEBUG-only logging makes that undiagnosable without the reporter
+        first being told to turn debug on. Warn once per device so the cause
+        is visible at HA's default level, then fall back to DEBUG so a
+        permanently unreadable siren can't spam the log every 900 s.
+        """
+        coordinator = _make_coordinator()
+        coordinator.devices = {"d1": _make_device("d1")}
+        coordinator._devices_api = MagicMock()
+        coordinator._devices_api.get_hub_device_siren_settings = AsyncMock(
+            side_effect=TimeoutError("timed out")
+        )
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.aegis_ajax.coordinator"):
+            await coordinator._async_fetch_and_merge_siren_settings("d1")
+            await coordinator._async_fetch_and_merge_siren_settings("d1")
+            await coordinator._async_fetch_and_merge_siren_settings("d1")
+
+        siren_records = [r for r in caplog.records if "siren settings" in r.getMessage()]
+        warnings = [r for r in siren_records if r.levelno >= logging.WARNING]
+        assert len(warnings) == 1, f"expected exactly one warning, got {len(warnings)}"
+        assert len(siren_records) == 3, "every attempt should still be logged somewhere"
