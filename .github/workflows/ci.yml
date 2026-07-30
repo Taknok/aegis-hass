@@ -47,6 +47,25 @@ jobs:
           print(f'| Missing | {miss} |')
           " >> "$GITHUB_STEP_SUMMARY"
 
+  # The dev container installs the newest protobuf/grpcio satisfying our floors,
+  # and a generated stub only fails to load when the runtime is *older* than the
+  # compiler that built it — so the test suite is structurally unable to catch
+  # that, and #354 shipped through a fully green CI. This job installs the exact
+  # floors manifest.json advertises (the oldest runtime a user can end up with)
+  # and imports every stub, so the floors we publish are floors we have run.
+  proto-runtime-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Import every generated stub at the advertised runtime floors
+        run: |
+          docker run --rm -v "$(pwd)":/app -w /app python:3.12-slim bash -c '
+            set -euo pipefail
+            pip install --quiet --no-cache-dir --root-user-action=ignore \
+              $(python3 scripts/check_proto_imports.py --floors)
+            python3 scripts/check_proto_imports.py
+          '
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -34,8 +34,11 @@ typecheck:
 dead-code:
 	vulture custom_components/aegis_ajax/ vulture_whitelist.py --exclude custom_components/aegis_ajax/proto/
 
+# PROTOS is optional and takes paths relative to proto_src/. Pass it to
+# regenerate only what changed instead of churning the whole tree:
+#   make proto PROTOS="systems/ajax/.../hub_device.proto"
 proto:
-	bash scripts/compile_protos.sh
+	bash scripts/compile_protos.sh $(PROTOS)
 
 cli:
 	python scripts/test_connection.py
