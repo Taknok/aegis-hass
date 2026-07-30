@@ -34,8 +34,16 @@ make check
 | `make lint` | Run linter |
 | `make format` | Format code |
 | `make typecheck` | Run type checker |
-| `make proto` | Compile protobuf files |
+| `make proto` | Compile protobuf files (add `PROTOS="path/rel/to/proto_src.proto"` for just one) |
 | `make cli` | Interactive connection test |
+
+## Regenerating protobuf stubs
+
+Two rules, both enforced by `tests/unit/test_proto_gencode_version.py`:
+
+**Always compile through `make proto`, never an ad-hoc `python -m grpc_tools.protoc`.** Every generated stub embeds the version of the compiler that produced it, and protobuf refuses to load a stub built by a version newer than the runtime installed next to it. A stray compiler therefore ships code that raises `VersionError` on import for every user — which is exactly what happened in the 1.15.1 betas (#354). `make proto` verifies the installed `grpcio-tools` matches the exact pin in `pyproject.toml` before writing anything, and refuses to run if it doesn't (rebuild the dev image: `make build-docker`).
+
+**Regenerate only what you changed:** `make proto PROTOS="systems/ajax/.../hub_device.proto"`. A full `make proto` rewrites ~2600 files and buries the real change; a partial one keeps the diff reviewable. Bumping the `grpcio-tools` pin is the exception — that requires a full recompile so the whole tree stays on one version, plus raising the `protobuf`/`grpcio` floors in **both** `manifest.json` and `pyproject.toml` to whatever the new compiler stamps in.
 
 ## Commit Conventions
 
