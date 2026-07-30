@@ -101,6 +101,60 @@ def extract_notification_id(encoded_data: str) -> str | None:
     return None
 
 
+def _dispatch_notification(raw: bytes) -> Any | None:  # noqa: ANN401
+    """Unwrap a push payload to its `Notification`, or None.
+
+    Both real push shapes carry the same `Notification`: plain
+    `notification` pushes and the `media_enriched_notification` wrapper
+    used by photo-on-demand. Returns None when the bytes aren't a
+    dispatch event at all, which is the signal to fall back to the
+    best-effort scan.
+    """
+    try:
+        from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.service.push_notification_dispatch import (  # noqa: PLC0415, E501
+            event_pb2,
+        )
+    except ImportError:  # pragma: no cover - vendored protos always ship
+        _LOGGER.debug("Push dispatch proto not available")
+        return None
+
+    try:
+        dispatch = event_pb2.PushNotificationDispatchEvent()
+        dispatch.ParseFromString(raw)
+    except Exception:
+        return None
+
+    push_case = dispatch.WhichOneof("push")
+    if push_case == "notification":
+        return dispatch.notification
+    if push_case == "media_enriched_notification":
+        return dispatch.media_enriched_notification.notification
+    return None
+
+
+def extract_space_id(raw: bytes) -> str | None:
+    """Return the id of the space a push belongs to, or None (#358).
+
+    `Notification.space.id` is the only field that names the space, and
+    it matches `Space.id` from the spaces API byte for byte. The hub's
+    own id is *not* usable for this: it rides `HubOrigin.hex_id` as an
+    8-char ASCII string, so the pre-#358 router — which scanned the
+    payload for `bytes.fromhex(hub_id)` — could never match a genuine
+    capture and fell through to fanning every event out to every space.
+
+    Read structurally rather than by scanning: an id is just hex text,
+    and a substring search cannot tell one space's id from a device id
+    or a notification id that happens to embed it.
+    """
+    notification = _dispatch_notification(raw)
+    if notification is None:
+        return None
+    # Protobuf parsing is permissive enough that unrelated bytes can
+    # decode into this shape, so the caller must still check the result
+    # against the spaces it actually knows about.
+    return notification.space.id or None
+
+
 def _extract_event_with_compiled_protos(raw: bytes) -> tuple[str, dict[str, Any]] | None:
     """Resolve a push payload to an HA `(event_type, data)` pair.
 
@@ -137,27 +191,8 @@ def _resolve_event_from_dispatch(
     the payload isn't a dispatch notification with a typed content, so
     the caller falls back to the best-effort scan.
     """
-    try:
-        from systems.ajax.api.ecosystem.v2.communicationsvc.mobile.service.push_notification_dispatch import (  # noqa: PLC0415, E501
-            event_pb2,
-        )
-    except ImportError:  # pragma: no cover - vendored protos always ship
-        _LOGGER.debug("Push dispatch proto not available")
-        return False, None
-
-    try:
-        dispatch = event_pb2.PushNotificationDispatchEvent()
-        dispatch.ParseFromString(raw)
-    except Exception:
-        return False, None
-
-    push_case = dispatch.WhichOneof("push")
-    if push_case == "notification":
-        notification = dispatch.notification
-    elif push_case == "media_enriched_notification":
-        # Photo-on-demand pushes wrap the same `Notification` message.
-        notification = dispatch.media_enriched_notification.notification
-    else:
+    notification = _dispatch_notification(raw)
+    if notification is None:
         return False, None
 
     if not notification.HasField("content"):

@@ -895,13 +895,41 @@ class AjaxNotificationListener:
                         self._coordinator.fire_push_event, target_space, event_type, event_data
                     )
                     self._apply_security_state_from_event(target_space, event_data)
+                elif len(self._coordinator._space_ids) == 1:
+                    # One space: the destination is unambiguous even when the
+                    # payload didn't name it, so route there rather than drop.
+                    only_space = self._coordinator._space_ids[0]
+                    self._dispatch_to_loop(
+                        self._coordinator.fire_push_event, only_space, event_type, event_data
+                    )
+                    self._apply_security_state_from_event(only_space, event_data)
+                elif named_space := notification_event_parser.extract_space_id(raw):
+                    # The push names a space this entry doesn't manage. The FCM
+                    # stream is per account, so a user who added 2 of their 5
+                    # systems keeps receiving the other 3 — expected, not a
+                    # defect, and deliberately not a warning.
+                    _LOGGER.debug(
+                        "Push event %s belongs to space %s, which is not configured "
+                        "in this entry; not delivered",
+                        event_type,
+                        named_space,
+                    )
                 else:
-                    # Fallback: single-space installations or unknown hub
-                    for space_id in self._coordinator._space_ids:
-                        self._dispatch_to_loop(
-                            self._coordinator.fire_push_event, space_id, event_type, event_data
-                        )
-                        self._apply_security_state_from_event(space_id, event_data)
+                    # Several spaces and the payload named none of them:
+                    # dropping the event beats the pre-#358 fan-out. Fanning out
+                    # fired *every* hub's event entity, each stamping its own
+                    # genuine hub_id, so device triggers scoped to an untouched
+                    # system ran and every panel took the state of whichever hub
+                    # moved. The unconditional snapshot nudge below still
+                    # settles state. WARNING, not DEBUG: an event is discarded.
+                    _LOGGER.warning(
+                        "Push event %s could not be routed to any of the %d spaces on this "
+                        "account and was not delivered; alarm state will follow from the "
+                        "snapshot refresh instead. Please report this at "
+                        "https://github.com/bvis/aegis-hass/issues/358 with debug logs.",
+                        event_type,
+                        len(self._coordinator._space_ids),
+                    )
                 # A security-state event can change several groups at once
                 # (scenario / keypad / fob) plus `night_mode_enabled` — state
                 # only the heavier snapshot carries. Nudge the same
@@ -1061,10 +1089,23 @@ class AjaxNotificationListener:
         )
 
     def _find_space_for_event(self, raw: bytes) -> str | None:
-        """Try to match the event to a space by finding a known hub_id in raw bytes."""
+        """Resolve which space a push belongs to, or None (#358).
+
+        Reads `Notification.space.id` structurally and matches it against
+        the spaces this entry knows about. The legacy hub-id byte scan is
+        kept as a fallback for payload shapes the structural path can't
+        decode, but it never matched a real capture — the hub id travels
+        as ASCII text, not as the raw bytes it looked for.
+        """
+        space_id = notification_event_parser.extract_space_id(raw)
+        if space_id and space_id in self._coordinator.spaces:
+            return space_id
         for space in self._coordinator.spaces.values():
             if space.hub_id:
-                hub_bytes = bytes.fromhex(space.hub_id)
+                try:
+                    hub_bytes = bytes.fromhex(space.hub_id)
+                except ValueError:
+                    continue
                 if hub_bytes in raw:
                     return space.id
         return None

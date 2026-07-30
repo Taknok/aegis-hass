@@ -3027,3 +3027,192 @@ class TestStalePushFilter:
         listener._on_notification({"ENCODED_DATA": encoded}, "pid-no-ts")
 
         assert hass.loop.call_soon_threadsafe.call_count == 1
+
+
+class TestPushSpaceRouting:
+    """A push must reach only the space that produced it (#358).
+
+    `_parse_and_fire_event` routes on `_find_space_for_event`; when that
+    returns None it used to fan the event out to *every* space. On a
+    single-space install the fan-out is silently correct, so the defect
+    only surfaces with several Ajax systems on one account: one hub's
+    arm/disarm fired every hub's event entity, and every device trigger
+    scoped to any of them ran.
+    """
+
+    # The real capture in `_REAL_PUSH_ENCODED_DATA` belongs to this space.
+    # Its hub's `HubOrigin.hex_id` is "E5F6A7B8", which — decisively — does
+    # NOT appear in the payload as raw bytes, which is why the old
+    # `bytes.fromhex(hub_id) in raw` scan could never route it.
+    _CAPTURED_SPACE_ID = "aabb11223344556677889900"
+    _CAPTURED_HUB_ID = "E5F6A7B8"
+
+    def _make_listener(self, spaces: dict[str, str]) -> AjaxNotificationListener:
+        """Listener over a coordinator holding `{space_id: hub_id}`."""
+        hass = MagicMock()
+        hass.loop = MagicMock()
+        hass.loop.is_running.return_value = True
+        hass.loop.call_soon_threadsafe.side_effect = lambda cb, *a: cb(*a)
+        coordinator = MagicMock()
+        coordinator.spaces = {
+            space_id: MagicMock(id=space_id, hub_id=hub_id) for space_id, hub_id in spaces.items()
+        }
+        coordinator._space_ids = list(spaces)
+        return AjaxNotificationListener(hass=hass, coordinator=coordinator, **_FCM_KWARGS)
+
+    def test_routes_by_notification_space_id(self) -> None:
+        """The payload's `Notification.space.id` identifies the space.
+
+        Would fail if routing went back to scanning for the hub id's raw
+        bytes: that substring is absent from this genuine capture.
+        """
+        listener = self._make_listener(
+            {
+                "1111111111111111111111aa": "AAAAAAAA",
+                self._CAPTURED_SPACE_ID: self._CAPTURED_HUB_ID,
+                "3333333333333333333333cc": "CCCCCCCC",
+            }
+        )
+        raw = base64.b64decode(_REAL_PUSH_ENCODED_DATA)
+
+        assert listener._find_space_for_event(raw) == self._CAPTURED_SPACE_ID
+
+    def test_unroutable_push_does_not_fan_out_to_every_space(self) -> None:
+        """#358: with several spaces, an unroutable push fires none of them.
+
+        Broadcasting stamps each copy with a *genuine* hub_id, so the
+        device trigger's own filter cannot save us — every scoped
+        automation matches its own legitimate-looking event.
+        """
+        listener = self._make_listener(
+            {
+                "1111111111111111111111aa": "AAAAAAAA",
+                "2222222222222222222222bb": "BBBBBBBB",
+            }
+        )
+        encoded = base64.b64encode(b"unroutable payload").decode()
+
+        with (
+            patch.object(
+                listener,
+                "_extract_event_from_proto",
+                return_value=("disarm", {"raw_tag": "space_disarmed"}),
+            ),
+            patch.object(listener, "_extract_source_info", return_value={}),
+            patch.object(listener, "_find_space_for_event", return_value=None),
+        ):
+            listener._parse_and_fire_event(encoded)
+
+        listener._coordinator.fire_push_event.assert_not_called()
+
+    def test_unroutable_push_does_not_restate_every_space(self) -> None:
+        """The fan-out also applied the security state to every space, so
+        disarming one hub briefly showed all of them disarmed."""
+        listener = self._make_listener(
+            {
+                "1111111111111111111111aa": "AAAAAAAA",
+                "2222222222222222222222bb": "BBBBBBBB",
+            }
+        )
+        encoded = base64.b64encode(b"unroutable payload").decode()
+
+        with (
+            patch.object(
+                listener,
+                "_extract_event_from_proto",
+                return_value=("disarm", {"raw_tag": "space_disarmed"}),
+            ),
+            patch.object(listener, "_extract_source_info", return_value={}),
+            patch.object(listener, "_find_space_for_event", return_value=None),
+            patch.object(listener, "_apply_security_state_from_event") as apply_state,
+        ):
+            listener._parse_and_fire_event(encoded)
+
+        apply_state.assert_not_called()
+
+    def test_unroutable_push_on_single_space_still_fires(self) -> None:
+        """No regression for the overwhelmingly common install: with one
+        space the destination is unambiguous even when routing fails."""
+        listener = self._make_listener({"1111111111111111111111aa": "AAAAAAAA"})
+        encoded = base64.b64encode(b"unroutable payload").decode()
+
+        with (
+            patch.object(
+                listener,
+                "_extract_event_from_proto",
+                return_value=("disarm", {"raw_tag": "space_disarmed"}),
+            ),
+            patch.object(listener, "_extract_source_info", return_value={}),
+            patch.object(listener, "_find_space_for_event", return_value=None),
+        ):
+            listener._parse_and_fire_event(encoded)
+
+        listener._coordinator.fire_push_event.assert_called_once()
+        assert listener._coordinator.fire_push_event.call_args[0][0] == "1111111111111111111111aa"
+
+    def test_unroutable_multi_space_push_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Dropping an event is degraded behaviour, so it must be visible at
+        the default HA log level, not buried at DEBUG."""
+        listener = self._make_listener(
+            {
+                "1111111111111111111111aa": "AAAAAAAA",
+                "2222222222222222222222bb": "BBBBBBBB",
+            }
+        )
+        encoded = base64.b64encode(b"unroutable payload").decode()
+
+        with (
+            patch.object(
+                listener,
+                "_extract_event_from_proto",
+                return_value=("disarm", {"raw_tag": "space_disarmed"}),
+            ),
+            patch.object(listener, "_extract_source_info", return_value={}),
+            patch.object(listener, "_find_space_for_event", return_value=None),
+            caplog.at_level(logging.WARNING, logger="custom_components.aegis_ajax.notification"),
+        ):
+            listener._parse_and_fire_event(encoded)
+
+        assert any(
+            "could not be routed" in r.message and r.levelno >= logging.WARNING
+            for r in caplog.records
+        ), f"expected a routing warning, got {[r.message for r in caplog.records]}"
+
+    def test_push_for_an_unconfigured_space_is_dropped_quietly(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A push naming a space the user chose not to add is not a defect.
+
+        The FCM stream is per *account*, so someone with five Ajax systems
+        who added two of them keeps receiving pushes for the other three.
+        Those are correctly undeliverable, so they must not raise the
+        warning reserved for a push we genuinely could not place.
+        """
+        listener = self._make_listener(
+            {
+                "1111111111111111111111aa": "AAAAAAAA",
+                "2222222222222222222222bb": "BBBBBBBB",
+            }
+        )
+        raw = base64.b64decode(_REAL_PUSH_ENCODED_DATA)
+        encoded = base64.b64encode(raw).decode()
+
+        with (
+            patch.object(
+                listener,
+                "_extract_event_from_proto",
+                return_value=("disarm", {"raw_tag": "space_disarmed"}),
+            ),
+            patch.object(listener, "_extract_source_info", return_value={}),
+            caplog.at_level(logging.DEBUG, logger="custom_components.aegis_ajax.notification"),
+        ):
+            listener._parse_and_fire_event(encoded)
+
+        listener._coordinator.fire_push_event.assert_not_called()
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert not warnings, (
+            f"unexpected warning for a foreign space: {[r.message for r in warnings]}"
+        )
+        assert any(self._CAPTURED_SPACE_ID in r.message for r in caplog.records), (
+            "the skipped space should be named at DEBUG"
+        )
