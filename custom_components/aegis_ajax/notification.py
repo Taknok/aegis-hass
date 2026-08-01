@@ -888,7 +888,11 @@ class AjaxNotificationListener:
                     event_data.get("raw_tag"),
                     event_data.get("group_id"),
                 )
-                # Try to route to the correct space by matching hub_id from raw bytes
+                # Route to the space the push itself names (#358). This used to
+                # scan the payload for the hub id as raw bytes, which never
+                # matched a genuine push — the id travels as ASCII text — so
+                # every event took the fallback below and was delivered to every
+                # space. Don't reintroduce a byte scan here.
                 target_space = self._find_space_for_event(raw)
                 if target_space:
                     self._dispatch_to_loop(
