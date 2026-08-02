@@ -292,6 +292,8 @@ HTS_TEMPERATURE_DEVICE_TYPES: frozenset[str] = frozenset(
         # and excluded from the gRPC fetch.
         "street_siren",
         "street_siren_plus_g3",
+        "street_siren_double_deck",
+        "street_siren_double_deck_fibra",
         "home_siren",
         "home_siren_g3",
         "home_siren_s",

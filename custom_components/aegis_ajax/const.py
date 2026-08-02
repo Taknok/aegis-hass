@@ -176,6 +176,8 @@ HUB_DEVICE_TEMPERATURE_DEVICE_TYPES = frozenset(
     {
         "street_siren",
         "street_siren_plus_g3",
+        "street_siren_double_deck",
+        "street_siren_double_deck_fibra",
         "home_siren",
         "home_siren_g3",
         "home_siren_s",
