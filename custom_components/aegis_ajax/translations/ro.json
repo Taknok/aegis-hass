@@ -195,6 +195,10 @@
             "title": "Senzorii de retea ai hub-ului degradati",
             "description": "Conexiunea HTS (care alimenteaza senzorii Ethernet / Wi-Fi / GSM / alimentare) pentru spatiul {space_id} nu reuseste sa ramana activa de {minutes_failing} minute. Senzorii de retea ai hub-ului vor fi indisponibili pana la recuperare. Cauza frecventa: un firewall blocheaza traficul de iesire catre endpoint-urile HTS Ajax, sau instabilitate prelungita a retelei intre Home Assistant si cloud-ul Ajax. Reparatia se inchide automat cand HTS se reconecteaza."
         },
+        "fcm_push_stuck": {
+            "title": "Notificări push întrerupte — același mesaj închide conexiunea de fiecare dată",
+            "description": "Conexiunea push s-a închis de {terminations} ori consecutiv în timpul procesării aceluiași mesaj. Deoarece acel mesaj nu este niciodată confirmat, serviciul push Ajax îl retrimite și fiecare conexiune nouă se termină la fel, așa că problema nu se rezolvă singură. Starea alarmei nu este afectată (provine din interogare și din conexiunea cu hubul, niciodată din push), dar între timp se pierd evenimentele în timp real, cum ar fi soneria. Aegis a înlocuit înregistrarea push pentru a întrerupe bucla, iar push-ul ar trebui să revină într-un minut. Această notificare dispare automat după ce conexiunea rămâne stabilă o vreme. Dacă reapare, raportați pe GitHub (issue #373)."
+        },
         "grpcio_version_mismatch": {
             "title": "Aegis are nevoie de grpcio {required} sau mai nou (gasit {current})",
             "description": "Aegis depinde de `grpcio` pentru canalul gRPC care comunica cu cloud-ul Ajax, iar instalarea ta Home Assistant aduce `grpcio` {current}. Sub {required} autentificarea poate esua cu erori HTTP/2 criptice. Pe Home Assistant Core sau Container manifest-ul integrarii fixeaza versiunea la instalare, dar pe Home Assistant OS runtime-ul foloseste un grpcio la nivel de sistem pe care manifest-ul nu il poate influenta — de obicei trebuie sa actualizezi Home Assistant OS la o build care include un grpcio mai nou. Reparatia se inchide automat la urmatoarea reincarcare cand versiunea depaseste {required}."

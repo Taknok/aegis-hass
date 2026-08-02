@@ -22,14 +22,19 @@ from custom_components.aegis_ajax.const import (
     RAW_TAG_TO_SECURITY_STATE,
     SECURITY_STATE_EVENT_TYPES,
 )
-from custom_components.aegis_ajax.notification_fcm_guard import attach_fcm_log_guard
+from custom_components.aegis_ajax.notification_fcm_guard import (
+    attach_fcm_log_guard,
+    install_fcm_decrypt_guard,
+)
 from custom_components.aegis_ajax.repairs import (
     async_clear_fcm_credentials_invalid,
     async_clear_fcm_credentials_malformed,
     async_clear_fcm_not_configured,
+    async_clear_fcm_push_stuck,
     async_register_fcm_credentials_invalid,
     async_register_fcm_credentials_malformed,
     async_register_fcm_not_configured,
+    async_register_fcm_push_stuck,
 )
 
 if TYPE_CHECKING:
@@ -78,6 +83,15 @@ FCM_HEALTHY_RUN_RESET_SECONDS = 1800.0
 # measured (sub-second) but short enough that a replay from any prior session
 # is rejected.
 STALE_PUSH_THRESHOLD_SECONDS = 120.0
+
+# #373: a push frame the library can't decrypt kills the client *before* it
+# acks the message, so the server replays it and kills every restart the
+# supervisor above performs. The decrypt guard removes the known cause, but
+# any future undecodable frame would loop the same way, and the loop is
+# invisible (the panel stays correct via polling + HTS). So when this many
+# consecutive supervised deaths happen with the same last-received
+# persistent_id, raise a Repair naming the recovery.
+FCM_STUCK_TERMINATION_THRESHOLD = 3
 
 # A run of this many consecutive printable-ASCII bytes in a redacted hex dump
 # is treated as text (likely a device name / label) and masked. Shorter runs
@@ -159,6 +173,12 @@ class AjaxNotificationListener:
         self._fcm_restart_at: float | None = None
         self._fcm_restart_backoff: float = FCM_RESTART_BACKOFF_INITIAL_SECONDS
         self._fcm_client_started_at: float | None = None
+        # #373: last persistent_id handed to us, plus which id the client was
+        # sitting on when it last died and how many deaths in a row shared it.
+        self._last_persistent_id: str | None = None
+        self._death_persistent_id: str | None = None
+        self._death_repeat_count: int = 0
+        self._stuck_recovery_done: bool = False
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._rejected_store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, REJECTED_STORAGE_KEY
@@ -490,6 +510,8 @@ class AjaxNotificationListener:
 
         # Defuse the traceback CPU bomb before the listen loop exists (#285).
         attach_fcm_log_guard()
+        # Contain undecodable push frames before any can arrive (#373).
+        install_fcm_decrypt_guard(FcmPushClient)
         try:
             self._push_client = FcmPushClient(
                 callback=self._on_notification,
@@ -528,6 +550,95 @@ class AjaxNotificationListener:
         self._fcm_supervisor_unsub = async_track_time_interval(
             self._hass, _tick, timedelta(seconds=FCM_SUPERVISE_INTERVAL_SECONDS)
         )
+
+    async def _async_note_push_client_death(self) -> None:
+        """Track deaths that keep landing on the same message (#373).
+
+        A client killed by an undecodable frame dies within milliseconds of
+        receiving it, so the last persistent_id we were handed identifies the
+        message it choked on. The same id across several consecutive deaths
+        means the server is replaying something we cannot get past — the loop
+        cannot break on its own, because the frame is never acked.
+
+        Deaths with no push seen at all (an ordinary network outage) carry no
+        id and must not accumulate, or a long connectivity problem would raise
+        a Repair about a poisoned message that does not exist.
+        """
+        persistent_id = self._last_persistent_id
+        if persistent_id is None:
+            self._death_persistent_id = None
+            self._death_repeat_count = 0
+            return
+        if persistent_id == self._death_persistent_id:
+            self._death_repeat_count += 1
+        else:
+            self._death_persistent_id = persistent_id
+            self._death_repeat_count = 1
+        if self._death_repeat_count < FCM_STUCK_TERMINATION_THRESHOLD:
+            return
+        _LOGGER.warning(
+            "FCM push client has now been terminated %d times in a row while "
+            "handling the same replayed message. This cannot recover on its "
+            "own: the message is never acknowledged, so Ajax's push provider "
+            "redelivers it and it kills the client again. Alarm state is "
+            "unaffected (it comes from polling and the hub connection), but "
+            "doorbell ring and other real-time events are lost. Replacing the "
+            "push registration to break the loop. See issue #373.",
+            self._death_repeat_count,
+        )
+        if self._entry_id:
+            async_register_fcm_push_stuck(
+                self._hass,
+                entry_id=self._entry_id,
+                terminations=self._death_repeat_count,
+            )
+        await self._async_replace_poisoned_registration()
+
+    async def _async_replace_poisoned_registration(self) -> None:
+        """Discard the FCM identity the poisoned message is queued against.
+
+        The replayed frame is queued server-side for *this* registration, so
+        the only way out is a new one — which is what the reporter of #373 did
+        by hand. Doing it here keeps the user out of `.storage`.
+
+        Runs **once** per streak. If something other than a poisoned frame is
+        killing the client, re-registering will not help, and an unbounded
+        loop of registrations against the Firebase project is exactly the
+        failure #227 taught us to avoid.
+        """
+        if self._stuck_recovery_done:
+            return
+        self._stuck_recovery_done = True
+        try:
+            await self._store.async_remove()
+        except Exception:
+            _LOGGER.debug("Could not remove stored FCM credentials", exc_info=True)
+            return
+        self._credentials = None
+        # Cancel the pending backoff: `async_start` owns the restart from here.
+        self._fcm_restart_at = None
+        _LOGGER.warning(
+            "Discarded the stored FCM registration and requesting a new one. "
+            "Real-time push should resume within a minute; the Repair notice "
+            "stays until it has run cleanly for a while."
+        )
+        try:
+            await self.async_start()
+        except Exception:
+            _LOGGER.warning(
+                "Re-registering with FCM after the stuck-push recovery failed; "
+                "push stays on the supervised retry path.",
+                exc_info=True,
+            )
+
+    def _clear_stuck_push_state(self) -> None:
+        """Retire the death streak and its Repair after a healthy run."""
+        had_streak = self._death_repeat_count >= FCM_STUCK_TERMINATION_THRESHOLD
+        self._death_persistent_id = None
+        self._death_repeat_count = 0
+        self._stuck_recovery_done = False
+        if had_streak and self._entry_id:
+            async_clear_fcm_push_stuck(self._hass, entry_id=self._entry_id)
 
     def _schedule_fcm_restart(self, now: float) -> float:
         """Arm the next restart attempt and advance the backoff; returns the delay."""
@@ -570,6 +681,9 @@ class AjaxNotificationListener:
                     and now - self._fcm_client_started_at >= FCM_HEALTHY_RUN_RESET_SECONDS
                 ):
                     self._fcm_restart_backoff = FCM_RESTART_BACKOFF_INITIAL_SECONDS
+                    # A long healthy run means we are not stuck on a replayed
+                    # message, so retire the streak and any Repair it raised.
+                    self._clear_stuck_push_state()
                 return
             delay = self._schedule_fcm_restart(now)
             _LOGGER.warning(
@@ -585,6 +699,9 @@ class AjaxNotificationListener:
             except Exception:
                 _LOGGER.debug("Error stopping terminated FCM client", exc_info=True)
             self._push_client = None
+            # Last, because the stuck-push recovery may start a replacement
+            # client and the teardown above would otherwise discard it.
+            await self._async_note_push_client_death()
             return
         if self._fcm_restart_at is None or now < self._fcm_restart_at:
             return
@@ -638,6 +755,9 @@ class AjaxNotificationListener:
     ) -> None:
         """Handle incoming FCM push notification."""
         _LOGGER.debug("Push notification received: persistent_id=%s", persistent_id)
+        # Remembered so the supervisor can tell a client killed by a replayed
+        # message from one killed by a network outage (#373).
+        self._last_persistent_id = persistent_id
 
         # Try to extract photo URL from push data
         # The key might be "ENCODED_DATA" (top-level) or nested inside "data"

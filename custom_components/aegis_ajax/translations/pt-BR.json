@@ -195,6 +195,10 @@
             "title": "Sensores de rede do hub degradados",
             "description": "A conexao HTS (que alimenta os sensores de Ethernet / Wi-Fi / GSM / energia) do espaco {space_id} esta ha {minutes_failing} minutos sem conseguir se manter ativa. Os sensores de rede do hub ficarao indisponiveis ate que se recupere. Causa mais comum: firewall bloqueando trafego de saida para os endpoints HTS da Ajax, ou instabilidade de rede prolongada entre o Home Assistant e a nuvem Ajax. O reparo e encerrado automaticamente quando o HTS reconectar."
         },
+        "fcm_push_stuck": {
+            "title": "Notificações push interrompidas — a mesma mensagem derruba a conexão repetidamente",
+            "description": "A conexão push foi encerrada {terminations} vezes seguidas ao processar a mesma mensagem. Como essa mensagem nunca é confirmada, o serviço push da Ajax a reenvia e cada nova conexão termina do mesmo jeito, então isso não se resolve sozinho. O estado do alarme não é afetado (ele vem da consulta periódica e da conexão com o hub, nunca do push), mas nesse período os eventos em tempo real, como a campainha, são perdidos. O Aegis substituiu seu registro push para quebrar o ciclo e o push deve voltar em cerca de um minuto. Este aviso desaparece automaticamente quando a conexão ficar estável por um tempo. Se voltar a aparecer, relate no GitHub (issue #373)."
+        },
         "grpcio_version_mismatch": {
             "title": "Aegis precisa de grpcio {required} ou superior (encontrado {current})",
             "description": "O Aegis depende de `grpcio` para o canal gRPC que conversa com a nuvem Ajax, e sua instalacao do Home Assistant traz `grpcio` {current}. Abaixo de {required} o login pode falhar com erros HTTP/2 pouco descritivos. No Home Assistant Core ou Container o manifest da integracao fixa a versao na instalacao, mas no Home Assistant OS o runtime usa um grpcio do sistema que este manifest nao pode influenciar — normalmente e necessario atualizar o Home Assistant OS para uma build que inclua um grpcio mais recente. O reparo se encerra automaticamente no proximo carregamento quando a versao ultrapassar {required}."

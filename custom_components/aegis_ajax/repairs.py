@@ -37,6 +37,7 @@ ISSUE_HTS_CHRONIC_FAILURE = "hts_chronic_failure"
 ISSUE_FCM_CREDENTIALS_INVALID = "fcm_credentials_invalid"
 ISSUE_FCM_CREDENTIALS_MALFORMED = "fcm_credentials_malformed"
 ISSUE_FCM_NOT_CONFIGURED = "fcm_not_configured"
+ISSUE_FCM_PUSH_STUCK = "fcm_push_stuck"
 ISSUE_GRPCIO_VERSION_MISMATCH = "grpcio_version_mismatch"
 
 # Floor below which the integration's gRPC calls have historically failed
@@ -183,6 +184,38 @@ def async_register_fcm_not_configured(hass: HomeAssistant, *, entry_id: str) -> 
 
 def async_clear_fcm_not_configured(hass: HomeAssistant, *, entry_id: str) -> None:
     ir.async_delete_issue(hass, DOMAIN, _issue_id(ISSUE_FCM_NOT_CONFIGURED, entry_id))
+
+
+def async_register_fcm_push_stuck(
+    hass: HomeAssistant,
+    *,
+    entry_id: str,
+    terminations: int,
+) -> None:
+    """The push client keeps dying on the same replayed message (#373).
+
+    Not fixable in-place: the recovery is to discard the FCM registration so
+    the server stops replaying the message that kills the client, and that is
+    destructive enough to belong to the user rather than to a Submit button.
+
+    This exists because the failure is otherwise **silent** — the alarm panel
+    stays correct throughout (state comes from polling and HTS, never from
+    push), so nothing looks broken while real-time events are gone.
+    """
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        _issue_id(ISSUE_FCM_PUSH_STUCK, entry_id),
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_FCM_PUSH_STUCK,
+        translation_placeholders={"terminations": str(terminations)},
+        learn_more_url=f"{DOCS_BASE_URL}push-notifications-fcm",
+    )
+
+
+def async_clear_fcm_push_stuck(hass: HomeAssistant, *, entry_id: str) -> None:
+    ir.async_delete_issue(hass, DOMAIN, _issue_id(ISSUE_FCM_PUSH_STUCK, entry_id))
 
 
 def _parse_version(value: str) -> tuple[int, ...]:
