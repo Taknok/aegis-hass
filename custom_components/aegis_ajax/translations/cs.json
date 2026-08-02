@@ -195,6 +195,10 @@
             "title": "Sitove senzory hubu zhorseny",
             "description": "Spojeni HTS (ktere dodava data senzorum Ethernet / Wi-Fi / GSM / napajeni) pro prostor {space_id} se {minutes_failing} minut nedari udrzet aktivni. Sitove senzory hubu budou nedostupne, dokud se nezotavi. Nejcasteji je to zpusobeno firewallem, ktery blokuje odchozi provoz na HTS endpointy Ajax, nebo trvalou nestabilitou site mezi Home Assistant a cloudem Ajax. Oprava se vyresi automaticky, jakmile se HTS znovu pripoji."
         },
+        "fcm_push_stuck": {
+            "title": "Push oznámení přerušena — stejná zpráva opakovaně ukončuje připojení",
+            "description": "Push připojení bylo {terminations}krát v řadě ukončeno při zpracování stejné zprávy. Protože tato zpráva není nikdy potvrzena, push služba Ajax ji znovu doručuje a každé nové připojení skončí stejně, takže se to samo nevyřeší. Stav alarmu to neovlivňuje (pochází z dotazování a z připojení k hubu, nikdy z push), ale zatím se ztrácejí události v reálném čase, například zvonek. Aegis vyměnil svou push registraci, aby smyčku přerušil; push by se měl obnovit během minuty. Toto upozornění zmizí samo, jakmile připojení chvíli vydrží. Pokud se vrátí, nahlaste to prosím na GitHubu (issue #373)."
+        },
         "grpcio_version_mismatch": {
             "title": "Aegis potrebuje grpcio {required} nebo novejsi (nalezeno {current})",
             "description": "Aegis je zavisly na `grpcio` pro gRPC kanal, ktery komunikuje s cloudem Ajax, a vase instalace Home Assistant ma `grpcio` {current}. Pod {required} muze prihlaseni selhat s krytickymi HTTP/2 chybami. Na Home Assistant Core nebo Container manifest integrace zafixuje verzi pri instalaci, ale na Home Assistant OS bezi system-wide grpcio, ktere tento manifest nemuze ovlivnit — obvykle je potreba aktualizovat Home Assistant OS na build s novejsim grpcio. Oprava se vyresi automaticky pri pristim nacteni, jakmile verze prekroci {required}."

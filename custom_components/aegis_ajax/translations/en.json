@@ -255,6 +255,10 @@
                 }
             }
         },
+        "fcm_push_stuck": {
+            "title": "Push notifications interrupted — the same message keeps ending the connection",
+            "description": "The push connection has ended {terminations} times in a row while handling the same message. Because that message is never acknowledged, Ajax's push provider keeps redelivering it and each new connection ends the same way, so this does not clear by itself. Your alarm state is not affected — it comes from polling and from the hub connection, never from push — but real-time events such as doorbell rings are lost while this lasts. Aegis has replaced its push registration to break the loop, and push should resume within a minute. This notice clears automatically once the connection has stayed up for a while. If it keeps coming back, please report it on GitHub (issue #373)."
+        },
         "grpcio_version_mismatch": {
             "title": "Aegis needs grpcio {required} or newer (found {current})",
             "description": "Aegis depends on `grpcio` for the gRPC channel that talks to the Ajax cloud, and your Home Assistant install ships `grpcio` {current}. Login can fail with cryptic HTTP/2 errors below {required}. On Home Assistant Core or Container the integration manifest pins the version on install, but on Home Assistant OS the runtime ships system-wide grpcio that this manifest cannot influence — you'll typically need to upgrade Home Assistant OS to a build that includes a newer grpcio. The Repair clears automatically on the next reload once the version crosses {required}."

@@ -203,7 +203,15 @@ class TestNotificationListener:
         coordinator = MagicMock()
         listener = AjaxNotificationListener(hass=hass, coordinator=coordinator, **_FCM_KWARGS)
 
-        with patch.dict("sys.modules", {"firebase_messaging": None}):
+        # `async_start` imports the *submodule* `firebase_messaging.fcmregister`,
+        # and a cached submodule is importable even when the parent key is None.
+        # Nulling only the parent therefore stops simulating an absent package
+        # as soon as anything else in the session has imported it, which let
+        # this test fall through into the real Store. Null both.
+        with patch.dict(
+            "sys.modules",
+            {"firebase_messaging": None, "firebase_messaging.fcmregister": None},
+        ):
             await listener.async_start()
 
         assert listener._push_client is None
@@ -3216,3 +3224,252 @@ class TestPushSpaceRouting:
         assert any(self._CAPTURED_SPACE_ID in r.message for r in caplog.records), (
             "the skipped space should be named at DEBUG"
         )
+
+
+class TestFcmStuckPushRepair:
+    """Repeated deaths on the same replayed message raise a Repair (#373).
+
+    A frame the library cannot decrypt kills the client before it acks the
+    message, so the server replays it and every supervised restart dies on it
+    again. Nothing about that loop is visible: alarm state stays correct via
+    polling and HTS, so only a log grep reveals it. Hence the Repair.
+    """
+
+    def _make_listener(self, entry_id: str = "entry-x") -> AjaxNotificationListener:
+        return AjaxNotificationListener(
+            hass=MagicMock(), coordinator=MagicMock(), **_FCM_KWARGS, entry_id=entry_id
+        )
+
+    @staticmethod
+    def _dead_client() -> MagicMock:
+        client = MagicMock()
+        client.do_listen = False
+        client.tasks = []
+        client.stop = AsyncMock()
+        return client
+
+    async def _die(self, listener: AjaxNotificationListener, now: float) -> None:
+        listener._push_client = self._dead_client()
+        await listener._async_supervise_push_client(now=now)
+
+    @pytest.mark.asyncio
+    async def test_repair_raised_on_third_death_with_same_persistent_id(self) -> None:
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:1785558606347172%abc"
+        with patch(
+            "custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"
+        ) as reg:
+            await self._die(listener, 1000.0)
+            await self._die(listener, 2000.0)
+            reg.assert_not_called()
+            await self._die(listener, 3000.0)
+        reg.assert_called_once()
+        assert reg.call_args.kwargs["entry_id"] == "entry-x"
+        assert reg.call_args.kwargs["terminations"] == 3
+
+    @pytest.mark.asyncio
+    async def test_deaths_on_different_messages_do_not_accumulate(self) -> None:
+        """Distinct ids mean the client is getting past messages, so whatever
+        is killing it is not a single replayed frame."""
+        listener = self._make_listener()
+        with patch(
+            "custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"
+        ) as reg:
+            for index in range(5):
+                listener._last_persistent_id = f"0:msg-{index}"
+                await self._die(listener, 1000.0 * (index + 1))
+        reg.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_deaths_with_no_push_received_never_raise(self) -> None:
+        """An ordinary network outage kills the client without any push having
+        arrived. That must not be reported as a poisoned message."""
+        listener = self._make_listener()
+        with patch(
+            "custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"
+        ) as reg:
+            for index in range(6):
+                await self._die(listener, 1000.0 * (index + 1))
+        reg.assert_not_called()
+        assert listener._death_repeat_count == 0
+
+    @pytest.mark.asyncio
+    async def test_streak_resets_when_a_new_message_arrives_between_deaths(self) -> None:
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        with patch(
+            "custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"
+        ) as reg:
+            await self._die(listener, 1000.0)
+            await self._die(listener, 2000.0)
+            # A different message got through — the streak is broken.
+            listener._last_persistent_id = "0:something-else"
+            await self._die(listener, 3000.0)
+            await self._die(listener, 4000.0)
+        reg.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_healthy_run_clears_the_repair(self) -> None:
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            for tick in (1000.0, 2000.0, 3000.0):
+                await self._die(listener, tick)
+        assert listener._death_repeat_count == 3
+
+        alive = MagicMock()
+        alive.do_listen = True
+        alive.tasks = []
+        listener._push_client = alive
+        listener._fcm_client_started_at = 5000.0
+        with patch("custom_components.aegis_ajax.notification.async_clear_fcm_push_stuck") as clr:
+            # Past FCM_HEALTHY_RUN_RESET_SECONDS of uninterrupted life.
+            await listener._async_supervise_push_client(now=5000.0 + 1800.0)
+        clr.assert_called_once_with(listener._hass, entry_id="entry-x")
+        assert listener._death_repeat_count == 0
+
+    @pytest.mark.asyncio
+    async def test_healthy_run_without_a_streak_clears_nothing(self) -> None:
+        """No Repair was raised, so there is nothing to delete — don't churn
+        the issue registry on every healthy supervision tick."""
+        listener = self._make_listener()
+        alive = MagicMock()
+        alive.do_listen = True
+        alive.tasks = []
+        listener._push_client = alive
+        listener._fcm_client_started_at = 0.0
+        with patch("custom_components.aegis_ajax.notification.async_clear_fcm_push_stuck") as clr:
+            await listener._async_supervise_push_client(now=1800.0)
+        clr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_entry_id_skips_the_repair_but_still_logs(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        listener = self._make_listener(entry_id="")
+        listener._last_persistent_id = "0:poison"
+        with (
+            patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck") as reg,
+            caplog.at_level(logging.WARNING),
+        ):
+            for tick in (1000.0, 2000.0, 3000.0):
+                await self._die(listener, tick)
+        reg.assert_not_called()
+
+    def test_callback_records_the_persistent_id(self) -> None:
+        listener = self._make_listener()
+        listener._on_notification({}, "0:1785558606347172%abc")
+        assert listener._last_persistent_id == "0:1785558606347172%abc"
+
+
+class TestFcmStuckPushRecovery:
+    """The stuck loop is broken by replacing the FCM registration (#373).
+
+    The replayed frame is queued server-side against a specific registration,
+    so a new identity is the only exit. The reporter did it by hand; doing it
+    here keeps users out of `.storage`.
+    """
+
+    def _make_listener(self) -> AjaxNotificationListener:
+        listener = AjaxNotificationListener(
+            hass=MagicMock(), coordinator=MagicMock(), **_FCM_KWARGS, entry_id="entry-x"
+        )
+        listener._store = MagicMock()
+        listener._store.async_remove = AsyncMock()
+        listener._credentials = {"fcm": {"registration": {"token": "old"}}}
+        listener.async_start = AsyncMock()
+        return listener
+
+    async def _die(self, listener: AjaxNotificationListener, now: float) -> None:
+        client = MagicMock()
+        client.do_listen = False
+        client.tasks = []
+        client.stop = AsyncMock()
+        listener._push_client = client
+        await listener._async_supervise_push_client(now=now)
+
+    @pytest.mark.asyncio
+    async def test_registration_is_discarded_and_renewed_at_the_threshold(self) -> None:
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            await self._die(listener, 1000.0)
+            await self._die(listener, 2000.0)
+            listener._store.async_remove.assert_not_called()
+            await self._die(listener, 3000.0)
+        listener._store.async_remove.assert_awaited_once()
+        listener.async_start.assert_awaited_once()
+        assert listener._credentials is None
+
+    @pytest.mark.asyncio
+    async def test_recovery_runs_only_once_per_streak(self) -> None:
+        """Re-registering in a loop against the Firebase project is exactly
+        what #227 exists to prevent."""
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            for tick in range(1, 8):
+                await self._die(listener, 1000.0 * tick)
+        assert listener._store.async_remove.await_count == 1
+        assert listener.async_start.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_replacement_client_is_not_torn_down_by_the_supervisor(self) -> None:
+        """Ordering guard: the teardown of the dead client must happen before
+        the recovery, or it would null out the client the recovery started."""
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        replacement = MagicMock()
+        replacement.do_listen = True
+        replacement.tasks = []
+
+        async def _fake_start() -> None:
+            listener._push_client = replacement
+
+        listener.async_start = AsyncMock(side_effect=_fake_start)
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            for tick in (1000.0, 2000.0, 3000.0):
+                await self._die(listener, tick)
+        assert listener._push_client is replacement
+
+    @pytest.mark.asyncio
+    async def test_failed_reregistration_leaves_the_backoff_path_intact(self) -> None:
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        listener.async_start = AsyncMock(side_effect=RuntimeError("no network"))
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            for tick in (1000.0, 2000.0, 3000.0):
+                await self._die(listener, tick)
+        # Swallowed, not raised out of the supervision tick.
+        listener.async_start.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_store_removal_failure_skips_reregistration(self) -> None:
+        """Re-registering without having dropped the old identity would leave
+        the poisoned queue in place and burn a Firebase registration."""
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        listener._store.async_remove = AsyncMock(side_effect=OSError("read-only fs"))
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            for tick in (1000.0, 2000.0, 3000.0):
+                await self._die(listener, tick)
+        listener.async_start.assert_not_awaited()
+        assert listener._credentials is not None
+
+    @pytest.mark.asyncio
+    async def test_healthy_run_rearms_the_recovery(self) -> None:
+        listener = self._make_listener()
+        listener._last_persistent_id = "0:poison"
+        with patch("custom_components.aegis_ajax.notification.async_register_fcm_push_stuck"):
+            for tick in (1000.0, 2000.0, 3000.0):
+                await self._die(listener, tick)
+        assert listener._stuck_recovery_done is True
+
+        alive = MagicMock()
+        alive.do_listen = True
+        alive.tasks = []
+        listener._push_client = alive
+        listener._fcm_client_started_at = 5000.0
+        with patch("custom_components.aegis_ajax.notification.async_clear_fcm_push_stuck"):
+            await listener._async_supervise_push_client(now=5000.0 + 1800.0)
+        assert listener._stuck_recovery_done is False
