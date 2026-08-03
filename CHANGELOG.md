@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.15.1] - unreleased
+## [1.15.1] - 2026-08-04
+
+Consolidates the `1.15.1-beta.1` – `1.15.1-beta.12` series. Every fix below was confirmed on the reporter's hardware or on a live Home Assistant install before this release.
 
 ### Added
 - **An Ajax Button in control mode now fires a Home Assistant event (#348).** A Button set to *control* mode was invisible to Home Assistant: the hub sends no push notification for it, so there was nothing to trigger an automation with. Each Button now gets its own `event` entity (`device_class: button`) that fires **`pressed`**, with the press timestamp the hub reports as an attribute. It rides the hub's status channel rather than push, so **it works without FCM configured**, and it fires whether the system is armed or disarmed. A Button in *panic* mode is unaffected and keeps firing `panic` on the hub's security event entity.
@@ -46,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - **The "Learn more" button on some Repair notices went to the wrong place.** Three of the push-notification Repairs and the hub-network-sensors one linked to README sections that no longer existed under those names, so the button dropped you at the top of a very long page instead of at the relevant section. The links now resolve, and the README carries explicit anchors so that rewording a heading cannot silently break them again — a test now checks every Repair link against the README and fails if one stops resolving.
+- **README corrections at the stable cut.** The Repairs feature list now includes the push-recovery Repair added by #373; the Sirens row states which models report internal temperature and which report only their settings; the Relays row explains that the dry-contact Relay has no load metering, so its Voltage sensor shows the module's supply voltage while Current and Energy read 0 by design (#325); and the event-attribute table documents the real arm/disarm source types (`SPACE_MEMBER`, `SPACE_CONTROL`, `KEYBOARD`) introduced by #367.
 
 ## [1.15.0] - 2026-07-26
 
