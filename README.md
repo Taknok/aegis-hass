@@ -328,6 +328,8 @@ An [example automations file](docs/automations.yaml) is also available with 24 a
 
 ## Entity Details
 
+<a id="hub-network"></a>
+
 ### Hub sensors
 - **CRA connection** — binary sensor showing whether the space has at least one approved monitoring company (CRA)
 - **CRA company** — disabled-by-default diagnostic sensor showing the approved monitoring company name; returns `multiple` if more than one approved CRA is attached
@@ -456,6 +458,8 @@ Areas where the integration could grow with community input:
 - **Any new device family** that shows up in the snapshot without entities.
 
 If you own any of these and would like it covered, open an issue on the [tracker](https://github.com/bvis/aegis-hass/issues/new) describing what you have and what's missing. Diagnostics dumps and debug logs from your install (Settings → Devices & Services → Aegis for Ajax → ⋮ → Download diagnostics, plus `custom_components.aegis_ajax: debug` in the logger config when relevant) are usually the most useful starting point — we can iterate over beta releases against your hardware until it works. Without that kind of involvement from people running the affected hardware, the integration can only cover what I personally use.
+
+<a id="push-notifications-fcm"></a>
 
 ## Push Notifications (Optional, but strongly recommended)
 
