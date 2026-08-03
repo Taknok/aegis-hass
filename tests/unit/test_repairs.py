@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.aegis_ajax.const import DOMAIN
 from custom_components.aegis_ajax.repairs import (
+    DOCS_BASE_URL,
     ISSUE_FCM_CREDENTIALS_INVALID,
     ISSUE_FCM_NOT_CONFIGURED,
     ISSUE_GRPCIO_VERSION_MISMATCH,
@@ -323,3 +326,48 @@ class TestAsyncCreateFixFlow:
         hass = MagicMock()
         flow = await async_create_fix_flow(hass, "some_other_issue", None)
         assert isinstance(flow, ConfirmRepairFlow)
+
+
+class TestLearnMoreAnchorsResolve:
+    """Every Repair's "Learn more" link must land on a real README section.
+
+    These are `learn_more_url` values built from `DOCS_BASE_URL`, i.e. fragment
+    links into the README. A fragment that matches nothing silently drops the
+    user at the top of a 600-line document — it doesn't 404, so nothing catches
+    it. Two of them were broken this way (`push-notifications-fcm`, used by
+    three FCM repairs, and `hub-network`) until explicit `<a id="...">` anchors
+    were added. The anchors are explicit precisely so that rewording a heading
+    can't break the links again; this test fails if one is removed.
+    """
+
+    @staticmethod
+    def _repo_root() -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def _readme_targets(self) -> set[str]:
+        text = (self._repo_root() / "README.md").read_text(encoding="utf-8")
+        targets: set[str] = set()
+        # GitHub auto-generates a slug per heading.
+        for heading in re.findall(r"^#{1,6}\s+(.*)$", text, re.MULTILINE):
+            slug = re.sub(r"[^a-z0-9\s-]", "", heading.strip().lower())
+            targets.add(slug.replace(" ", "-"))
+        # Plus any explicit anchor.
+        targets.update(re.findall(r"<a\s+id=\"([^\"]+)\"", text))
+        return targets
+
+    def _code_anchors(self) -> set[str]:
+        source = (self._repo_root() / "custom_components" / "aegis_ajax" / "repairs.py").read_text(
+            encoding="utf-8"
+        )
+        return set(re.findall(r"DOCS_BASE_URL\}([a-z0-9-]+)", source))
+
+    def test_every_repair_anchor_exists_in_readme(self) -> None:
+        anchors = self._code_anchors()
+        # Guard the guard: if the extraction regex ever stops matching, an
+        # empty set would make this test vacuously pass.
+        assert len(anchors) >= 4, f"anchor extraction looks broken: {anchors}"
+        missing = sorted(anchors - self._readme_targets())
+        assert not missing, f"Repair learn_more_url anchors not found in README: {missing}"
+
+    def test_docs_base_url_points_at_the_readme(self) -> None:
+        assert DOCS_BASE_URL.endswith("#")
