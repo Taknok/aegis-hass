@@ -293,6 +293,7 @@ HTS_TEMPERATURE_DEVICE_TYPES: frozenset[str] = frozenset(
         "street_siren",
         "street_siren_plus_g3",
         "street_siren_double_deck",
+        "street_siren_s_double_deck",
         "street_siren_double_deck_fibra",
         "home_siren",
         "home_siren_g3",
