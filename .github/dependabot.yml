@@ -14,6 +14,27 @@ updates:
       - python
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # grpcio-tools is pinned exactly, not floored, and bumping it is a piece of
+      # work rather than a dependency update: the compiler bakes its Protobuf
+      # gencode version into every generated stub, so the pin can only move
+      # together with a full recompile of the proto tree AND a matching rise of
+      # the runtime `protobuf` floor in pyproject.toml.
+      #
+      # That last part is the real blocker: 1.75.1 emits gencode 6.31.1, while
+      # 1.83.0 emits 7.35.1 — the exact version from the #354 failure
+      # ("gencode 7.35.1 runtime 6.32.0") that broke every install on
+      # 1.15.1-beta.6 → beta.10. Home Assistant ships protobuf 6.x, so stubs
+      # built by a 7.x compiler cannot be imported at all.
+      #
+      # CI cannot catch this: a bump on its own changes no stub, so every check
+      # passes and the breakage only lands on the next `make proto`. Hence the
+      # rule rather than a review habit. Patch bumps stay allowed — those keep
+      # gencode at 6.31.1. Revisit when Home Assistant itself ships protobuf 7.x.
+      - dependency-name: "grpcio-tools"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     groups:
       # Bundle all minor / patch bumps into one PR per week to reduce noise.
       python-minor-patch:
