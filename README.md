@@ -51,7 +51,7 @@ Ajax Systems provides co-branded versions of their mobile app to security compan
 - **Push notifications**: FCM integration for immediate event delivery
 - **2FA support** (TOTP)
 - **Reauth flow**: when the Ajax session is rejected (password rotated, 2FA newly enabled, server-side logout), HA shows the orange "Reconfigure" banner with a guided password prompt — entity ids, areas, automations and history survive untouched
-- **HA Repairs**: diagnosable conditions surface as cards under **Settings → Repairs** instead of being buried in `home-assistant.log` — hub offline > 24h, sustained HTS reconnect failure, FCM credentials rejected (with one-click fix flow), or grpcio version below the floor on Home Assistant OS
+- **HA Repairs**: diagnosable conditions surface as cards under **Settings → Repairs** instead of being buried in `home-assistant.log` — hub offline > 24h, sustained HTS reconnect failure, FCM credentials rejected (with one-click fix flow), a push connection repeatedly killed by an unreadable message (the integration renews its own push registration to recover), or grpcio version below the floor on Home Assistant OS
 - **System Health card**: one-line snapshot under **Settings → System → Repairs → System Information** with gRPC reachability, HTS / FCM connection ratios, last push / last poll ages — replaces log archaeology as the first triage step
 - **DHCP discovery**: Ajax hubs on the same LAN appear as a "Discovered" card in **Settings → Devices & Services**, no need to search by name
 - **MDI icons** for all entity types
@@ -199,7 +199,7 @@ You can type any custom label during setup if yours is not listed.
 | Fire/Smoke | FireProtect, FireProtect Plus, FireProtect 2 (all sub-models — heat-only `*hrb`/`*hsb`, CO-only `*crb`/`*csb`, multi-sensor `*hcrb`/`*hcsb`, AC-powered `*_ac`, UL-listed `*_ul`) | Smoke, steam (FireProtect 2 only — chamber discriminator), CO, high temperature, tamper, battery — sub-models without a given sensor expose only the relevant entity |
 | Water Leak | LeaksProtect | Leak detected, tamper, battery |
 | Air Quality | LifeQuality | Temperature (°C), humidity (%), CO₂ (ppm), battery, signal |
-| Relays/Switches | Relay, WallSwitch, Socket (and outlet variants) | On/off per channel; electrical readings (current, voltage, energy) across the WallSwitch / Socket family. Power is exposed as a direct reading on the Outlet Type E / F family (the firmware reports it natively) and as a derived `current × voltage` reading on the WallSwitch family. |
+| Relays/Switches | Relay, WallSwitch, Socket (and outlet variants) | On/off per channel; electrical readings (current, voltage, energy) across the WallSwitch / Socket family. Power is exposed as a direct reading on the Outlet Type E / F family (the firmware reports it natively) and as a derived `current × voltage` reading on the WallSwitch family. The dry-contact Relay switches a potential-free contact and has no load metering — its Voltage sensor reports the module's own supply voltage (~12 V on a 12 V PSU), and Current / Energy read 0 by design. |
 | Light switches | LightSwitch (Jeweller / Fibra) | On/off per channel |
 | Lights | LightSwitch Dimmer | Brightness control |
 | Locks | SmartLock, LockBridge (Yale) | Lock and unlock; state surfaces locked / unlocked. Hub-attached Jeweller locks (e.g. installer-added Yale modules on a third-party backend) are commanded over the generic device on/off path ([#206](https://github.com/bvis/aegis-hass/issues/206) / [#219](https://github.com/bvis/aegis-hass/issues/219)). _Note:_ unlatch (`lock.open`) isn't exposed on these — it's only available through Ajax's cloud SmartLock service, which they aren't registered with (the Ajax app can't unlatch them either) |
@@ -208,7 +208,7 @@ You can type any custom label during setup if yours is not listed.
 | Keypads | Keypad, KeypadPlus, KeypadCombi, KeypadTouchscreen | Battery, tamper, temperature, signal, NFC status |
 | Buttons | Button (Jeweller) | In **panic** mode, `panic` on the hub's security event entity (requires FCM). In **control** mode, a per-device `event` entity (`device_class: button`) that fires **`pressed`** on every press — this one rides the hub's status channel, so it works **without FCM**. Short and long click are indistinguishable in everything the hub reports, so there is one event rather than two. The DoubleButton is panic-only and reports nothing in control mode |
 | Keyfobs (experimental) | SpaceControl, SpaceControl S | Grouped under a single **Keyfobs** device, with one **Active** binary sensor per keyfob (diagnostic). The active/inactive value is **experimental and not yet confirmed** — see [Keyfobs (experimental)](#keyfobs-experimental). Who armed/disarmed via a keyfob already appears in the logbook regardless |
-| Sirens | HomeSiren, HomeSiren S, HomeSiren Fibra, HomeSiren G3, StreetSiren, StreetSiren S, StreetSiren Plus, StreetSiren Plus Fibra/G3, StreetSiren Fibra, StreetSiren Double Deck (& S / Fibra) | Battery, tamper, signal, internal temperature (HomeSiren / StreetSiren family), siren volume (select) and alarm duration (number) |
+| Sirens | HomeSiren, HomeSiren S, HomeSiren Fibra, HomeSiren G3, StreetSiren, StreetSiren S, StreetSiren Plus, StreetSiren Plus Fibra/G3, StreetSiren Fibra, StreetSiren Double Deck (& S / Fibra) | Battery, tamper, signal, siren volume (select) and alarm duration (number) on all models; internal temperature on the HomeSiren / StreetSiren family except StreetSiren S, StreetSiren Fibra, StreetSiren Plus Fibra and the Double Deck variants, which report only their settings on this path |
 | Range extenders | ReX, ReX 2, ReX 2 Fire | Battery, signal |
 | Wired-Input Modules | MultiTransmitter, MultiTransmitter Fibra, Hub Hybrid wired inputs | Tamper of the module itself; each registered wired sensor appears as its own device with an alert binary sensor and an `alarm_type` attribute (intrusion / fire / glass_break / vibration / …) |
 
@@ -328,6 +328,8 @@ An [example automations file](docs/automations.yaml) is also available with 24 a
 
 ## Entity Details
 
+<a id="hub-network"></a>
+
 ### Hub sensors
 - **CRA connection** — binary sensor showing whether the space has at least one approved monitoring company (CRA)
 - **CRA company** — disabled-by-default diagnostic sensor showing the approved monitoring company name; returns `multiple` if more than one approved CRA is attached
@@ -356,7 +358,7 @@ Each event includes enriched data attributes:
 | `transition` | Event transition state | `triggered`, `restored` |
 | `device_name` | Name of the device that triggered the event | `Front Door`, `Hallway Cam` |
 | `device_id` | Hex ID of the source device | `A1B2C3D4` |
-| `device_type` | Device type enum | `DOOR_PROTECT`, `MOTION_CAM_PHOD` |
+| `device_type` | Type enum of the event's source. For arm/disarm this names what performed the action: a person (`SPACE_MEMBER`), a keyfob (`SPACE_CONTROL`), a keypad (`KEYBOARD`) or a scenario | `DOOR_PROTECT`, `SPACE_MEMBER` |
 | `room_name` | Room the device is assigned to (when available) | `Kitchen`, `Entrance` |
 
 Use these in automation templates, e.g. `{{ trigger.event.data.device_name }}`.
@@ -456,6 +458,8 @@ Areas where the integration could grow with community input:
 - **Any new device family** that shows up in the snapshot without entities.
 
 If you own any of these and would like it covered, open an issue on the [tracker](https://github.com/bvis/aegis-hass/issues/new) describing what you have and what's missing. Diagnostics dumps and debug logs from your install (Settings → Devices & Services → Aegis for Ajax → ⋮ → Download diagnostics, plus `custom_components.aegis_ajax: debug` in the logger config when relevant) are usually the most useful starting point — we can iterate over beta releases against your hardware until it works. Without that kind of involvement from people running the affected hardware, the integration can only cover what I personally use.
+
+<a id="push-notifications-fcm"></a>
 
 ## Push Notifications (Optional, but strongly recommended)
 
