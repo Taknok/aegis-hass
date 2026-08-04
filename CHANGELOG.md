@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.16.0] - unreleased
 
 ### Added
+- **The hub firmware entity now shows the version your hub is actually running (#388).** Until now it only knew about updates Ajax had *queued*, with no "installed" side to compare against — which is why it could look uninformative, and why every hardware-specific bug report had to start by asking the reporter to read the version off the Ajax app by hand. The version turns out to ride the same hub status channel that already supplies ethernet, cellular and signal strength, rather than the cloud snapshot the entity was reading.
+
+  The `update.<hub>_firmware` entity now reports the running version as its installed version, and compares a queued update against it instead of against a placeholder. The diagnostics download gains a `hub_installed_firmware` section reporting it per hub.
+
+  **If your hub does not report it, nothing changes** — the entity behaves exactly as before, and the diagnostics section says `null` for that hub rather than omitting it, so "my hub doesn't send it" stays distinguishable from "I'm on an older build". Hub firmwares genuinely differ in what they include on this channel, so this is a real outcome and not a failure. Raised by @aavdberg, split out of #379.
+
 - **You can now see which devices belong to each Ajax group (#366).** Group membership was only visible in the Ajax mobile app, so from Home Assistant there was no way to answer "which group is this motion sensor in?" — anyone automating against a multi-group system had to hard-code their own knowledge of the layout. Each group's alarm panel now lists its members in two attributes, `member_device_ids` and `member_device_names`, and the diagnostics download reports each device's group id and name.
 
   No new entities are created: the information rides the group panels that already exist when the space is in group / zone mode. Note that Ajax **rooms** are a separate taxonomy and do not answer this — rooms already map to Home Assistant areas, and a device has a room and a group independently of each other.

@@ -519,3 +519,65 @@ class TestDeviceGroupInDiagnostics:
 
         assert result["devices"]["dev-1"]["group_id"] == "gone"
         assert result["devices"]["dev-1"]["group_name"] is None
+
+
+class TestHubInstalledFirmwareInDiagnostics:
+    """#388 — the installed firmware version drives the `update.*` entity.
+
+    It also answers the open question behind the issue: hub firmwares differ
+    in which sub-keys they put in their status row, so this block is what
+    tells us, per hub, whether the version arrived at all. Without it a
+    reporter whose entity still reads "current" cannot say whether the hub
+    stayed silent or the integration failed to read it.
+    """
+
+    @pytest.fixture
+    def coordinator(self) -> MagicMock:
+        coord = MagicMock()
+        coord.spaces = {"space-1": _make_space()}
+        coord.devices = {}
+        coord._stream_tasks = []
+        coord.notification_listener = MagicMock()
+        coord.devices_api.get_video_edge_onvif_rtsp_settings = AsyncMock(return_value=None)
+        coord.devices_api.get_video_edge_network = AsyncMock(return_value=None)
+        coord.devices_api.probe_webrtc_initiate = AsyncMock(return_value=None)
+        return coord
+
+    @staticmethod
+    def _entry(coordinator: MagicMock) -> MagicMock:
+        e = MagicMock()
+        e.runtime_data = coordinator
+        e.data = {"email": "user@example.com", "password": "secret"}
+        return e
+
+    @pytest.mark.asyncio
+    async def test_reported_version_is_dumped(self, coordinator: MagicMock) -> None:
+        from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+
+        coordinator.hub_network = {"hub-1": HubNetworkState(firmware_version="2.41.116")}
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["hub_installed_firmware"] == {"hub-1": "2.41.116"}
+
+    @pytest.mark.asyncio
+    async def test_hub_that_never_reported_is_null_not_missing(
+        self, coordinator: MagicMock
+    ) -> None:
+        # A null distinguishes "this hub does not report it" from "you are
+        # running a build that never looked" — a missing key cannot.
+        coordinator.hub_network = {}
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["hub_installed_firmware"] == {"hub-1": None}
+
+    @pytest.mark.asyncio
+    async def test_empty_version_reports_null(self, coordinator: MagicMock) -> None:
+        from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+
+        coordinator.hub_network = {"hub-1": HubNetworkState(firmware_version="")}
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["hub_installed_firmware"] == {"hub-1": None}

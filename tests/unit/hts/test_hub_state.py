@@ -13,6 +13,7 @@ from custom_components.aegis_ajax.api.hts.hub_state import (
     KEY_ETH_MASK,
     KEY_GSM_NETWORK_STATUS,
     KEY_GSM_SIGNAL_LVL,
+    KEY_HUB_FIRMWARE,
     KEY_HUB_POWERED,
     KEY_WIFI_SSID,
     HubNetworkState,
@@ -219,6 +220,48 @@ class TestWifiSsid:
     def test_empty_ssid(self) -> None:
         state = parse_hub_params({KEY_WIFI_SSID: b""})
         assert state.wifi_ssid == ""
+
+
+# ---------------------------------------------------------------------------
+# Installed firmware version (#388)
+# ---------------------------------------------------------------------------
+
+
+class TestHubFirmwareVersion:
+    """#388: the hub's *installed* firmware version.
+
+    The gRPC snapshot only carries a **queued** update, so the update entity
+    had no installed side to compare against. `hub_device.proto` declares
+    `HubDevice.Firmware.version = 0x37`, and that numbering is the same one
+    the HTS hub row uses — all 15 hub keys already decoded match this file,
+    including the whole Ethernet and Wi-Fi blocks, and `0x37` appears exactly
+    once so nothing else can claim it.
+    """
+
+    def test_key_is_the_proto_field_number(self) -> None:
+        # Pinning the constant: a wrong number here silently reads some other
+        # field's bytes as a version string, which is worse than reading none.
+        assert KEY_HUB_FIRMWARE == 0x37
+
+    def test_version_parsed(self) -> None:
+        state = parse_hub_params({KEY_HUB_FIRMWARE: b"2.41.116"})
+        assert state.firmware_version == "2.41.116"
+
+    def test_null_terminated_version(self) -> None:
+        state = parse_hub_params({KEY_HUB_FIRMWARE: b"2.41.116\x00\xff\xff"})
+        assert state.firmware_version == "2.41.116"
+
+    def test_absent_key_leaves_previous_value(self) -> None:
+        # Firmwares differ in which sub-keys they put in STATUS_BODY, so a
+        # frame without the key must not wipe a version we already read.
+        existing = HubNetworkState(firmware_version="2.41.116")
+        updated = parse_hub_params({KEY_WIFI_SSID: b"Home"}, existing=existing)
+        assert updated.firmware_version == "2.41.116"
+
+    def test_default_is_empty(self) -> None:
+        # A hub that never reports it must stay empty rather than inventing
+        # a version — the update entity keys its behaviour on this.
+        assert HubNetworkState().firmware_version == ""
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,15 @@ KEY_HUB_POWERED = 3
 KEY_GSM_SIGNAL_LVL = 4
 KEY_ETH_DHCP = 16
 KEY_WIFI_LEVEL = 18
+# The hub's *installed* firmware version (#388). `hub_device.proto` declares
+# `HubDevice.Firmware.version = 0x37`, and that file is the map for this row:
+# all 15 hub keys already decoded here match it, including the complete
+# Ethernet (0x10/0x23–0x26/0x4A) and Wi-Fi (0x12/0x27–0x2E/0x4B) blocks.
+# `0x37` appears exactly once in the file, so nothing else can claim it.
+#
+# Not every hub firmware puts every declared sub-key in its status body, so
+# treat absence as "unknown", never as "no firmware".
+KEY_HUB_FIRMWARE = 0x37
 KEY_ETH_IP = 35
 KEY_ETH_MASK = 36
 KEY_ETH_GATE = 37
@@ -81,6 +90,10 @@ class HubNetworkState:
 
     # Power
     externally_powered: bool = False
+
+    # Installed firmware version (#388). Empty when this hub's firmware
+    # doesn't report the sub-key — callers must treat "" as unknown.
+    firmware_version: str = ""
 
     @property
     def primary_connection(self) -> str:
@@ -405,6 +418,10 @@ def parse_hub_params(
     # Power ------------------------------------------------------------------
     if KEY_HUB_POWERED in params:
         updates["externally_powered"] = _bool_val(params[KEY_HUB_POWERED])
+
+    # Firmware ---------------------------------------------------------------
+    if KEY_HUB_FIRMWARE in params:
+        updates["firmware_version"] = _str_val(params[KEY_HUB_FIRMWARE])
 
     # Ethernet ---------------------------------------------------------------
     if KEY_ETH_ENABLED in params:
