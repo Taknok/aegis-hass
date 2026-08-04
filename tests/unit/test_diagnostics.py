@@ -388,3 +388,76 @@ class TestAsyncGetConfigEntryDiagnostics:
         assert space_info["group_mode_enabled"] is False
         assert space_info["night_mode_enabled"] is False
         assert space_info["groups"] == []
+
+
+class TestDeviceGroupInDiagnostics:
+    """#366 — the per-device direction of group membership."""
+
+    @staticmethod
+    def _coordinator(group_id: str | None) -> MagicMock:
+        from custom_components.aegis_ajax.api.models import Group
+
+        space = _make_space()
+        space = type(space)(
+            **{
+                **space.__dict__,
+                "groups": (
+                    Group(
+                        id="g1",
+                        space_id="space-1",
+                        name="Villa",
+                        security_state=SecurityState.DISARMED,
+                        sorting_key="g1",
+                    ),
+                ),
+                "group_mode_enabled": True,
+            }
+        )
+        device = _make_device()
+        device = type(device)(**{**device.__dict__, "group_id": group_id})
+
+        coord = MagicMock()
+        coord.spaces = {"space-1": space}
+        coord.devices = {"dev-1": device}
+        coord._stream_tasks = []
+        coord.notification_listener = MagicMock()
+        coord.devices_api.get_video_edge_onvif_rtsp_settings = AsyncMock(return_value=None)
+        coord.devices_api.get_video_edge_network = AsyncMock(return_value=None)
+        coord.devices_api.probe_webrtc_initiate = AsyncMock(return_value=None)
+        return coord
+
+    @staticmethod
+    def _entry(coordinator: MagicMock) -> MagicMock:
+        e = MagicMock()
+        e.runtime_data = coordinator
+        e.data = {"email": "user@example.com", "password": "secret"}
+        return e
+
+    @pytest.mark.asyncio
+    async def test_group_id_is_resolved_to_its_name(self) -> None:
+        coordinator = self._coordinator("g1")
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["devices"]["dev-1"]["group_id"] == "g1"
+        # The bare id means nothing to whoever reads the dump.
+        assert result["devices"]["dev-1"]["group_name"] == "Villa"
+
+    @pytest.mark.asyncio
+    async def test_ungrouped_device_reports_nulls(self) -> None:
+        coordinator = self._coordinator(None)
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["devices"]["dev-1"]["group_id"] is None
+        assert result["devices"]["dev-1"]["group_name"] is None
+
+    @pytest.mark.asyncio
+    async def test_unknown_group_id_does_not_raise(self) -> None:
+        """A stale id must degrade to a null name, not blow up the dump."""
+        coordinator = self._coordinator("gone")
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["devices"]["dev-1"]["group_id"] == "gone"
+        assert result["devices"]["dev-1"]["group_name"] is None

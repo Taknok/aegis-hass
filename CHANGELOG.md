@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.16.0] - unreleased
 
 ### Added
+- **You can now see which devices belong to each Ajax group (#366).** Group membership was only visible in the Ajax mobile app, so from Home Assistant there was no way to answer "which group is this motion sensor in?" — anyone automating against a multi-group system had to hard-code their own knowledge of the layout. Each group's alarm panel now lists its members in two attributes, `member_device_ids` and `member_device_names`, and the diagnostics download reports each device's group id and name.
+
+  No new entities are created: the information rides the group panels that already exist when the space is in group / zone mode. Note that Ajax **rooms** are a separate taxonomy and do not answer this — rooms already map to Home Assistant areas, and a device has a room and a group independently of each other.
+
 - **Street Siren Double Deck sirens now report their internal temperature.** The three Double Deck variants — Street Siren DoubleDeck, Street Siren S DoubleDeck and Street Siren DoubleDeck Fibra — gain the **internal temperature** sensor the rest of the siren family already had. `1.15.1` added their volume and alarm-duration controls but deliberately left temperature out, because nobody with the hardware had confirmed which channel carried it; it turns out to be the hub's status stream, the same one the other sirens use.
 
   Alongside it, a fix to *when* the entity is created. A temperature that arrives over the status stream is absent from the snapshot the integration reads at startup, so an entity created only for devices already reporting a value would never exist for these sirens and the value would have nowhere to land. Creation now follows from the device family having a known source, not from a value being present yet — so the sensor appears at startup and fills in on the first update. Families whose temperature comes from the slower snapshot instead are unchanged and still wait for a real value, so no permanently-empty sensor is created for them.

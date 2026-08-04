@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from custom_components.aegis_ajax import AjaxCobrandedConfigEntry
+    from custom_components.aegis_ajax.coordinator import AjaxCobrandedCoordinator
 
 TO_REDACT = {
     CONF_PASSWORD,
@@ -30,6 +31,21 @@ TO_REDACT = {
     "fcm_app_id",
     "fcm_sender_id",
 }
+
+
+def _group_name(coordinator: AjaxCobrandedCoordinator, group_id: str | None) -> str | None:
+    """Resolve an Ajax group id to its name across every space (#366).
+
+    Groups hang off spaces, so the lookup has to walk them; a device's
+    `group_id` alone is meaningless to a reader of the dump.
+    """
+    if not group_id:
+        return None
+    for space in coordinator.spaces.values():
+        group = space.get_group(group_id)
+        if group is not None:
+            return group.name
+    return None
 
 
 async def async_get_config_entry_diagnostics(
@@ -111,6 +127,12 @@ async def async_get_config_entry_diagnostics(
                 "online": d.is_online,
                 "malfunctions": d.malfunctions,
                 "bypassed": d.bypassed,
+                # Ajax group membership (#366), the per-device direction of
+                # what the group alarm panel lists. `None` on a space with
+                # group mode off, where the concept does not apply. Distinct
+                # from the room, which a device has independently.
+                "group_id": d.group_id,
+                "group_name": _group_name(coordinator, d.group_id),
                 # What the bypass switch actually shows (#338). `bypassed` is
                 # only one of the two sources: a device deactivated from the
                 # Ajax app leaves it False and reports `*_deactivation_*`
