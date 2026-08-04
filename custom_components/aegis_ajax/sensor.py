@@ -152,7 +152,7 @@ async def async_setup_entry(
 
     # Add SIM sensors for hub devices that have SIM info
     for space in coordinator.spaces.values():
-        if space.hub_id in coordinator.sim_info:
+        if space.hub_id and coordinator.devices.get(space.hub_id):
             entities.append(AjaxSimImeiSensor(coordinator=coordinator, hub_id=space.hub_id))
         if space.hub_id and coordinator.devices.get(space.hub_id):
             entities.append(

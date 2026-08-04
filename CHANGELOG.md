@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
 
 ### Fixed
+- **The hub IMEI sensor is now created whether or not the SIM read has succeeded yet (#379).** It was only offered for hubs the integration had already read SIM details from, so a read that failed or had not completed produced no entity at all — and because Home Assistant never removes an entity an integration stops offering, one created on an earlier start sat `unavailable` indefinitely with nothing to explain it. Creation now follows from the hub being present; whether the SIM details are readable is left to the entity's availability, which is what availability is for.
+
+  The sensor is disabled by default, as before, so a hub that never reports SIM details does not gain a visible dead entity. Fixed by @aavdberg, who reported the issue and sent the fix.
+
 - **Diagnostics downloads no longer contain the names you gave your devices, spaces, groups or keyfobs.** These downloads are routinely attached to bug reports, and Ajax names are free text that people set to where a thing is — street names and home addresses turn up as device names in practice. Each name is now reported as a **length** instead of a value, which still distinguishes a named device from an unnamed one while identifying nothing. It is the same rule the hub IMEI already followed.
 
   Nothing is lost for troubleshooting: devices are keyed by their id, which is what links them across the file, and a device's group id still matches an entry in that space's group list. The one casualty is the resolved group *name* that briefly accompanied each device's group id in `1.16.0-beta.1`; the id linkage replaces it. Raised by @wip3out3r, whose own device names include a street and an address.
