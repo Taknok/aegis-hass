@@ -108,7 +108,7 @@ class TestAsyncGetConfigEntryDiagnostics:
         result = await async_get_config_entry_diagnostics(MagicMock(), entry)
         assert "space-1" in result["spaces"]
         space_info = result["spaces"]["space-1"]
-        assert space_info["name"] == "Home"
+        assert space_info["name_length"] == len("Home")
         assert space_info["online"] is True
         assert space_info["malfunctions"] == 0
 
@@ -117,7 +117,7 @@ class TestAsyncGetConfigEntryDiagnostics:
         result = await async_get_config_entry_diagnostics(MagicMock(), entry)
         assert "dev-1" in result["devices"]
         dev_info = result["devices"]["dev-1"]
-        assert dev_info["name"] == "Front Door"
+        assert dev_info["name_length"] == len("Front Door")
         assert dev_info["type"] == "door_protect"
         assert dev_info["online"] is True
         assert dev_info["malfunctions"] == 0
@@ -366,12 +366,12 @@ class TestAsyncGetConfigEntryDiagnostics:
         assert len(space_info["groups"]) == 2
         assert space_info["groups"][0] == {
             "id": "g1",
-            "name": "Home",
+            "name_length": len("Home"),
             "security_state": "ARMED",
         }
         assert space_info["groups"][1] == {
             "id": "g2",
-            "name": "Studio",
+            "name_length": len("Studio"),
             "security_state": "DISARMED",
         }
 
@@ -492,14 +492,16 @@ class TestDeviceGroupInDiagnostics:
         return e
 
     @pytest.mark.asyncio
-    async def test_group_id_is_resolved_to_its_name(self) -> None:
+    async def test_group_id_links_to_an_entry_in_the_spaces_block(self) -> None:
+        # The device's group id used to be resolved to a name here. Names are
+        # now redacted, so the linkage has to survive through ids alone: the
+        # device's `group_id` must match a group listed under its space.
         coordinator = self._coordinator("g1")
 
         result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
 
         assert result["devices"]["dev-1"]["group_id"] == "g1"
-        # The bare id means nothing to whoever reads the dump.
-        assert result["devices"]["dev-1"]["group_name"] == "Villa"
+        assert "g1" in {g["id"] for g in result["spaces"]["space-1"]["groups"]}
 
     @pytest.mark.asyncio
     async def test_ungrouped_device_reports_nulls(self) -> None:
@@ -508,7 +510,6 @@ class TestDeviceGroupInDiagnostics:
         result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
 
         assert result["devices"]["dev-1"]["group_id"] is None
-        assert result["devices"]["dev-1"]["group_name"] is None
 
     @pytest.mark.asyncio
     async def test_unknown_group_id_does_not_raise(self) -> None:
@@ -518,7 +519,6 @@ class TestDeviceGroupInDiagnostics:
         result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
 
         assert result["devices"]["dev-1"]["group_id"] == "gone"
-        assert result["devices"]["dev-1"]["group_name"] is None
 
 
 class TestHubInstalledFirmwareInDiagnostics:
@@ -599,3 +599,94 @@ class TestHubInstalledFirmwareInDiagnostics:
         result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
 
         assert result["hub_installed_firmware"] == {"hub-1": None}
+
+
+class TestUserChosenNamesAreNotInTheDump:
+    """Diagnostics downloads get pasted into public issues, so user-chosen
+    names must not travel in them.
+
+    This is not hypothetical: a user reported that two of their Ajax device
+    names are street names and a third is their home address. Ajax names are
+    free text and people name things after where they are.
+
+    The project already applies this rule to the IMEI, which is reported as a
+    length and never as a value. Names get the same treatment: the length
+    still distinguishes "named" from "empty", and the device id — which is the
+    dump's own key — is what actually identifies a device across sections.
+    """
+
+    @pytest.fixture
+    def coordinator(self) -> MagicMock:
+        from dataclasses import replace
+
+        from custom_components.aegis_ajax.api.models import Group
+
+        coord = MagicMock()
+        space = replace(
+            _make_space(),
+            name="12 Acacia Avenue",
+            groups=(
+                Group(
+                    id="g1",
+                    space_id="space-1",
+                    name="Rosewood Street",
+                    security_state=SecurityState.DISARMED,
+                ),
+            ),
+        )
+        coord.spaces = {"space-1": space}
+        coord.devices = {"dev-1": replace(_make_device(), name="14 Rosewood Street", group_id="g1")}
+        coord.keyfobs = {"kf-1": MagicMock(name="x", index=0, active=True, flags_hex="00")}
+        coord.keyfobs["kf-1"].name = "Maria's keyfob"
+        coord._stream_tasks = []
+        coord.notification_listener = MagicMock()
+        coord.devices_api.get_video_edge_onvif_rtsp_settings = AsyncMock(return_value=None)
+        coord.devices_api.get_video_edge_network = AsyncMock(return_value=None)
+        coord.devices_api.probe_webrtc_initiate = AsyncMock(return_value=None)
+        return coord
+
+    @staticmethod
+    def _entry(coordinator: MagicMock) -> MagicMock:
+        e = MagicMock()
+        e.runtime_data = coordinator
+        e.data = {"email": "user@example.com", "password": "secret"}
+        return e
+
+    @pytest.mark.asyncio
+    async def test_no_user_chosen_name_appears_anywhere_in_the_dump(
+        self, coordinator: MagicMock
+    ) -> None:
+        # The guarantee that matters, asserted against the whole serialised
+        # dump rather than field by field: a future field that starts
+        # carrying a name fails this test without anyone remembering to
+        # update it.
+        import json
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+        blob = json.dumps(result, default=str)
+
+        for secret in (
+            "12 Acacia Avenue",
+            "Rosewood Street",
+            "14 Rosewood Street",
+            "Maria's keyfob",
+        ):
+            assert secret not in blob, f"{secret!r} leaked into the diagnostics dump"
+
+    @pytest.mark.asyncio
+    async def test_name_length_is_kept_so_unnamed_stays_distinguishable(
+        self, coordinator: MagicMock
+    ) -> None:
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["devices"]["dev-1"]["name_length"] == len("14 Rosewood Street")
+        assert result["spaces"]["space-1"]["name_length"] == len("12 Acacia Avenue")
+
+    @pytest.mark.asyncio
+    async def test_device_id_still_identifies_the_device(self, coordinator: MagicMock) -> None:
+        # Redaction must not cost the ability to follow one device through
+        # the dump — the id is the key and the group link still resolves.
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert "dev-1" in result["devices"]
+        assert result["devices"]["dev-1"]["group_id"] == "g1"
