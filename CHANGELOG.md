@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
 
+### Fixed
+- **A hub whose SIM details can't be read now says so, instead of quietly dropping the IMEI sensor (#379).** The IMEI sensor is only created for hubs the integration has successfully read SIM details from. When that read failed there was no sign of it: the error was swallowed into a debug-level line that named neither the cause nor the status code, so the sensor either never appeared or — if it had been created on an earlier start — sat at `unavailable` indefinitely, because Home Assistant does not remove entities an integration stops offering.
+
+  The first failure per hub is now a warning naming the cause and saying which sensor it affects; repeats stay at debug so a hub that can never report a SIM doesn't fill the log. A hub that genuinely has no modem is not an error and stays silent. The diagnostics download also gains a `sim_info` section saying, per hub, whether the read has ever succeeded — the IMEI itself is not included, only its length, since these downloads get shared publicly.
+
+  This is diagnostic groundwork rather than a cure: if your IMEI sensor is unavailable it will now tell you *why*, which is what we need in order to fix the underlying cause.
+
 ## [1.15.1] - 2026-08-04
 
 Consolidates the `1.15.1-beta.1` – `1.15.1-beta.12` series. Every fix below was confirmed on the reporter's hardware or on a live Home Assistant install before this release.

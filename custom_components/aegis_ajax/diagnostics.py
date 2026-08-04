@@ -176,6 +176,28 @@ async def async_get_config_entry_diagnostics(
             for kid, k in coordinator.keyfobs.items()
         },
         "video_edge_onvif_rtsp": video_edge_probe,
+        # What decides whether a hub gets an IMEI sensor at all (#379). A
+        # `null` here is the answer to "why is my IMEI sensor unavailable":
+        # the read never succeeded, so the entity was never offered this
+        # start — and Home Assistant leaves one created on an earlier start
+        # showing `unavailable` rather than removing it.
+        # The IMEI itself identifies the hub's modem and these dumps get
+        # pasted into public issues, so only its shape is reported: a length
+        # of 15 says the read worked, 0 says it returned an empty string.
+        "sim_info": {
+            hub_id: (
+                {
+                    "status": info.status_name,
+                    "active_sim": info.active_sim,
+                    "imei_length": len(info.imei),
+                }
+                if (info := coordinator.sim_info.get(hub_id))
+                else None
+            )
+            for hub_id in sorted(
+                {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
+            )
+        },
         # Firmware update state feeding the `update.*` entities (project
         # rule: every entity-driving field is dumped here). Both maps are
         # empty most of the time — Ajax only lists a hub/device while an

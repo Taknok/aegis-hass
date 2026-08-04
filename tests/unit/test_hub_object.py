@@ -197,7 +197,14 @@ class TestGetSimInfo:
         assert result.status == 2
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_exception(self) -> None:
+    async def test_propagates_the_exception(self) -> None:
+        """A failed read must not look like "this hub has no SIM" (#379).
+
+        Both used to return `None`, which left the caller unable to tell a
+        broken read from a wired-only hub — and so the IMEI sensor went
+        missing with nothing logged above debug to explain it. The caller
+        now owns the error and reports the cause.
+        """
         api = self._make_api()
 
         async def _raising_stream() -> AsyncGenerator[bytes, None]:
@@ -208,8 +215,8 @@ class TestGetSimInfo:
         api._client._get_channel().unary_stream.return_value = mock_method
         api._client._session.get_call_metadata.return_value = []
 
-        result = await api.get_sim_info("hub-xyz")
-        assert result is None
+        with pytest.raises(RuntimeError, match="stream error"):
+            await api.get_sim_info("hub-xyz")
 
     @pytest.mark.asyncio
     async def test_returns_none_when_stream_empty(self) -> None:

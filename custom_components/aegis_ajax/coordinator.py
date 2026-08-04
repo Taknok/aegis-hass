@@ -283,6 +283,9 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.devices: dict[str, Device] = {}
         self.rooms: dict[str, Room] = {}
         self.sim_info: dict[str, SimCardInfo] = {}
+        # Hubs whose SIM read has already failed once. Only used to keep the
+        # warning to one line per hub (#379); cleared on a later success.
+        self._sim_info_failed: set[str] = set()
         # Pending hub firmware update keyed by hub_id (#updates). Absent
         # entry = the hub reports no pending update OR the streamHubObject
         # call hasn't completed yet. Refreshed on the same hourly cycle
@@ -698,9 +701,7 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             seen_hubs.add(space.hub_id)
             if space.hub_id not in self.sim_info:
-                sim = await self._hub_object_api.get_sim_info(space.hub_id)
-                if sim:
-                    self.sim_info[space.hub_id] = sim
+                await self._fetch_sim_info(space.hub_id)
             fw = await self._hub_object_api.get_firmware_info(space.hub_id)
             if fw is None:
                 self.hub_firmware_updates.pop(space.hub_id, None)
@@ -714,6 +715,50 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 device_updates[dfu.device_id.upper()] = dfu
         self.device_firmware_updates = device_updates
         self._sim_info_last_fetch = now
+
+    async def _fetch_sim_info(self, hub_id: str) -> None:
+        """Read a hub's SIM info once, and say out loud when it can't be read.
+
+        The IMEI sensor is only created for hubs present in `sim_info`, so a
+        failure here means the entity silently never appears — and if it was
+        created on an earlier boot it stays `unavailable` forever, because
+        Home Assistant does not evict entities a platform stops offering.
+        That is the whole of #379, and it used to be invisible: the read
+        swallowed every exception into a DEBUG line that named neither the
+        cause nor the gRPC status code.
+
+        First failure per hub is a warning naming the cause; repeats drop to
+        debug so a hub that can never report a SIM doesn't fill the log.
+        A hub that simply has no modem returns `None` without raising and is
+        not an error — it is logged once at debug and nothing is created.
+        """
+        try:
+            sim = await self._hub_object_api.get_sim_info(hub_id)
+        except Exception as exc:  # noqa: BLE001
+            first_failure = hub_id not in self._sim_info_failed
+            self._sim_info_failed.add(hub_id)
+            _LOGGER.log(
+                logging.WARNING if first_failure else logging.DEBUG,
+                "Failed to read SIM info for hub %s: %s%s",
+                hub_id,
+                self._describe_rpc_error(exc),
+                (
+                    " — its IMEI sensor will not be created, and an IMEI sensor "
+                    "from an earlier start will stay unavailable, until a read "
+                    "succeeds. Further failures for this hub are logged at debug "
+                    "level."
+                    if first_failure
+                    else ""
+                ),
+            )
+            return
+
+        if sim:
+            self._sim_info_failed.discard(hub_id)
+            self.sim_info[hub_id] = sim
+            return
+
+        _LOGGER.debug("Hub %s reported no SIM section; no IMEI sensor will be created", hub_id)
 
     async def _maybe_refresh_rooms(self, now: float) -> None:
         """Cached once-per-hour room + monitoring_companies + groups refresh

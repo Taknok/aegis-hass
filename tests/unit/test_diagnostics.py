@@ -390,6 +390,64 @@ class TestAsyncGetConfigEntryDiagnostics:
         assert space_info["groups"] == []
 
 
+class TestSimInfoInDiagnostics:
+    """#379 — `sim_info` decides whether an IMEI sensor exists, so it belongs here.
+
+    Without it, "my IMEI sensor is unavailable" cannot be answered from a
+    diagnostics download: nothing in the dump said whether the read had ever
+    succeeded for that hub.
+    """
+
+    @pytest.fixture
+    def coordinator(self) -> MagicMock:
+        coord = MagicMock()
+        coord.spaces = {"space-1": _make_space()}
+        coord.devices = {}
+        coord._stream_tasks = []
+        coord.notification_listener = MagicMock()
+        coord.devices_api.get_video_edge_onvif_rtsp_settings = AsyncMock(return_value=None)
+        coord.devices_api.get_video_edge_network = AsyncMock(return_value=None)
+        coord.devices_api.probe_webrtc_initiate = AsyncMock(return_value=None)
+        return coord
+
+    @staticmethod
+    def _entry(coordinator: MagicMock) -> MagicMock:
+        e = MagicMock()
+        e.runtime_data = coordinator
+        e.data = {"email": "user@example.com", "password": "secret"}
+        return e
+
+    @pytest.mark.asyncio
+    async def test_hub_with_no_successful_read_is_reported_as_null(
+        self, coordinator: MagicMock
+    ) -> None:
+        coordinator.sim_info = {}
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["sim_info"] == {"hub-1": None}
+
+    @pytest.mark.asyncio
+    async def test_successful_read_reports_shape_but_never_the_imei(
+        self, coordinator: MagicMock
+    ) -> None:
+        from custom_components.aegis_ajax.api.hub_object import SimCardInfo
+
+        coordinator.sim_info = {
+            "hub-1": SimCardInfo(active_sim=1, status=2, imei="357812093456789")
+        }
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["sim_info"]["hub-1"] == {
+            "status": "active",
+            "active_sim": 1,
+            "imei_length": 15,
+        }
+        # The IMEI identifies the modem and these dumps get pasted publicly.
+        assert "357812093456789" not in str(result)
+
+
 class TestDeviceGroupInDiagnostics:
     """#366 — the per-device direction of group membership."""
 
