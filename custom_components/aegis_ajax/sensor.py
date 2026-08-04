@@ -26,9 +26,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from custom_components.aegis_ajax.api.hts.hub_state import (
     DIRECT_POWER_DEVICE_TYPES,
     ELECTRICAL_DEVICE_TYPES,
+    HTS_TEMPERATURE_DEVICE_TYPES,
 )
 from custom_components.aegis_ajax.api.models import MonitoringCompanyStatus
-from custom_components.aegis_ajax.const import HTS_TEMPERATURE_DEVICE_TYPES
 from custom_components.aegis_ajax.coordinator import AjaxCobrandedCoordinator
 from custom_components.aegis_ajax.entity import build_device_info
 
