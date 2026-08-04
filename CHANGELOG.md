@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - unreleased
+
+### Added
+- **Street Siren Double Deck sirens now report their internal temperature.** The three Double Deck variants — Street Siren DoubleDeck, Street Siren S DoubleDeck and Street Siren DoubleDeck Fibra — gain the **internal temperature** sensor the rest of the siren family already had. `1.15.1` added their volume and alarm-duration controls but deliberately left temperature out, because nobody with the hardware had confirmed which channel carried it; it turns out to be the hub's status stream, the same one the other sirens use.
+
+  Alongside it, a fix to *when* the entity is created. A temperature that arrives over the status stream is absent from the snapshot the integration reads at startup, so an entity created only for devices already reporting a value would never exist for these sirens and the value would have nowhere to land. Creation now follows from the device family having a known source, not from a value being present yet — so the sensor appears at startup and fills in on the first update. Families whose temperature comes from the slower snapshot instead are unchanged and still wait for a real value, so no permanently-empty sensor is created for them.
+
+  Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
+
 ## [1.15.1] - 2026-08-04
 
 Consolidates the `1.15.1-beta.1` – `1.15.1-beta.12` series. Every fix below was confirmed on the reporter's hardware or on a live Home Assistant install before this release.
