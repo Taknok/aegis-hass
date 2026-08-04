@@ -345,6 +345,16 @@ class TestAjaxSimImeiSensor:
         assert sensor.available is False
 
 
+class TestAjaxSimImeiSensorConstruction:
+    def test_sensor_can_be_constructed_when_hub_device_exists_but_sim_info_is_empty(self) -> None:
+        coordinator = MagicMock()
+        coordinator.devices = {"hub-1": _make_hub_device("hub-1")}
+        coordinator.sim_info = {}
+        sensor = AjaxSimImeiSensor(coordinator=coordinator, hub_id="hub-1")
+        assert sensor.unique_id == "aegis_ajax_hub-1_sim_imei"
+        assert sensor.available is False
+
+
 class TestHubWifiSensors:
     def _make_coordinator(self, hub_id: str = "hub-1") -> MagicMock:
         coordinator = MagicMock()
