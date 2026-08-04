@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from custom_components.aegis_ajax import AjaxCobrandedConfigEntry
-    from custom_components.aegis_ajax.coordinator import AjaxCobrandedCoordinator
 
 TO_REDACT = {
     CONF_PASSWORD,
@@ -31,21 +30,6 @@ TO_REDACT = {
     "fcm_app_id",
     "fcm_sender_id",
 }
-
-
-def _group_name(coordinator: AjaxCobrandedCoordinator, group_id: str | None) -> str | None:
-    """Resolve an Ajax group id to its name across every space (#366).
-
-    Groups hang off spaces, so the lookup has to walk them; a device's
-    `group_id` alone is meaningless to a reader of the dump.
-    """
-    if not group_id:
-        return None
-    for space in coordinator.spaces.values():
-        group = space.get_group(group_id)
-        if group is not None:
-            return group.name
-    return None
 
 
 async def async_get_config_entry_diagnostics(
@@ -97,11 +81,18 @@ async def async_get_config_entry_diagnostics(
             "webrtc": webrtc,
         }
 
+    # Every user-chosen name below is reported as a LENGTH, never a value.
+    # These downloads get pasted into public issues, and Ajax names are free
+    # text that people set to where a thing is: street names and home
+    # addresses have turned up as device names in practice. The length still
+    # separates "named" from "empty", and the ids — which are the dump's own
+    # keys — are what identify a device across sections. Same rule the IMEI
+    # already follows below.
     return {
         "entry_data": async_redact_data(dict(entry.data), TO_REDACT),
         "spaces": {
             sid: {
-                "name": s.name,
+                "name_length": len(s.name or ""),
                 "security_state": s.security_state.name,
                 "online": s.is_online,
                 "malfunctions": s.malfunctions_count,
@@ -111,7 +102,7 @@ async def async_get_config_entry_diagnostics(
                 "groups": [
                     {
                         "id": g.id,
-                        "name": g.name,
+                        "name_length": len(g.name or ""),
                         "security_state": g.security_state.name,
                     }
                     for g in s.groups
@@ -121,7 +112,7 @@ async def async_get_config_entry_diagnostics(
         },
         "devices": {
             did: {
-                "name": d.name,
+                "name_length": len(d.name or ""),
                 "type": d.device_type,
                 "state": d.state,
                 "online": d.is_online,
@@ -132,7 +123,6 @@ async def async_get_config_entry_diagnostics(
                 # group mode off, where the concept does not apply. Distinct
                 # from the room, which a device has independently.
                 "group_id": d.group_id,
-                "group_name": _group_name(coordinator, d.group_id),
                 # What the bypass switch actually shows (#338). `bypassed` is
                 # only one of the two sources: a device deactivated from the
                 # Ajax app leaves it False and reports `*_deactivation_*`
@@ -168,7 +158,7 @@ async def async_get_config_entry_diagnostics(
         },
         "keyfobs": {
             kid: {
-                "name": k.name,
+                "name_length": len(k.name or ""),
                 "index": k.index,
                 "active": k.active,
                 "flags_hex": k.flags_hex,
@@ -194,6 +184,30 @@ async def async_get_config_entry_diagnostics(
                 if (info := coordinator.sim_info.get(hub_id))
                 else None
             )
+            for hub_id in sorted(
+                {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
+            )
+        },
+        # The version each hub says it is *running* (#388), read from its
+        # status row rather than from the Ajax cloud. `null` means the hub
+        # has not reported it — which is a real outcome, since hub firmwares
+        # differ in which sub-keys they include, so the key is emitted for
+        # every hub to keep "did not report" distinguishable from "build
+        # that never looked".
+        "hub_installed_firmware": {
+            hub_id: ((state := coordinator.hub_network.get(hub_id)) and state.firmware_version)
+            or None
+            for hub_id in sorted(
+                {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
+            )
+        },
+        # The packed integer the version above was decoded from. Dumped even
+        # when the decode failed: a hub that packs it differently is then
+        # answerable from this file instead of needing a capture session,
+        # which is what this took to work out in the first place.
+        "hub_installed_firmware_raw": {
+            hub_id: ((state := coordinator.hub_network.get(hub_id)) and state.firmware_version_raw)
+            or None
             for hub_id in sorted(
                 {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
             )

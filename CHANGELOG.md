@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.16.0] - unreleased
 
 ### Added
+- **The hub firmware entity now shows the version your hub is actually running (#388).** Until now it only knew about updates Ajax had *queued*, with no "installed" side to compare against — which is why it could look uninformative, and why every hardware-specific bug report had to start by asking the reporter to read the version off the Ajax app by hand. The version turns out to ride the same hub status channel that already supplies ethernet, cellular and signal strength, rather than the cloud snapshot the entity was reading.
+
+  The `update.<hub>_firmware` entity now reports the running version as its installed version, and compares a queued update against it instead of against a placeholder. The diagnostics download gains a `hub_installed_firmware` section reporting it per hub.
+
+  **If your hub does not report it, nothing changes** — the entity behaves exactly as before, and the diagnostics section says `null` for that hub rather than omitting it, so "my hub doesn't send it" stays distinguishable from "I'm on an older build". Hub firmwares genuinely differ in what they include on this channel, so this is a real outcome and not a failure. The version is also dumped in its raw packed form, so a hub that encodes it differently can be diagnosed from a diagnostics download rather than needing a live capture. Raised by @aavdberg, split out of #379.
+
 - **You can now see which devices belong to each Ajax group (#366).** Group membership was only visible in the Ajax mobile app, so from Home Assistant there was no way to answer "which group is this motion sensor in?" — anyone automating against a multi-group system had to hard-code their own knowledge of the layout. Each group's alarm panel now lists its members in two attributes, `member_device_ids` and `member_device_names`, and the diagnostics download reports each device's group id and name.
 
   No new entities are created: the information rides the group panels that already exist when the space is in group / zone mode. Note that Ajax **rooms** are a separate taxonomy and do not answer this — rooms already map to Home Assistant areas, and a device has a room and a group independently of each other.
@@ -19,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
 
 ### Fixed
+- **Diagnostics downloads no longer contain the names you gave your devices, spaces, groups or keyfobs.** These downloads are routinely attached to bug reports, and Ajax names are free text that people set to where a thing is — street names and home addresses turn up as device names in practice. Each name is now reported as a **length** instead of a value, which still distinguishes a named device from an unnamed one while identifying nothing. It is the same rule the hub IMEI already followed.
+
+  Nothing is lost for troubleshooting: devices are keyed by their id, which is what links them across the file, and a device's group id still matches an entry in that space's group list. The one casualty is the resolved group *name* that briefly accompanied each device's group id in `1.16.0-beta.1`; the id linkage replaces it. Raised by @wip3out3r, whose own device names include a street and an address.
+
 - **A hub on battery no longer asks for a full snapshot every time one of its devices reports in (#386).** During a grid outage a hub was requesting a complete status refresh — about 8.6 KB — every few minutes, at the exact moment it was running on battery over a degraded link. The cause was a routine status update from an ordinary device being counted as evidence about the *hub's* mains power: the check that separates the two only recognised one of the layouts the hub uses to frame these messages, so on the other layout a device's operational-state byte was read as the hub's power flag. Since it disagreed with the stored state, every such update triggered a refresh to settle the disagreement.
 
   The refresh is now skipped for any message that carries device data, which is never evidence about mains power. A genuine power change still arrives on its own flat message and still requests immediate confirmation, so nothing gets slower to react. Thanks to @aavdberg, whose log excerpt caught both halves of the message in the same millisecond and made this findable. Note this addresses the request storm; whether it also explains a second `unplugged` being logged is still being investigated in #386.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -526,6 +527,47 @@ class TestHandleUpdate:
         await asyncio.sleep(0)
 
         client.request_hub_data.assert_awaited_once_with("12345678")
+
+    @pytest.mark.asyncio
+    async def test_body_logs_which_hub_sub_keys_arrived(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """#388: name the hub row's sub-keys so a claim about them is falsifiable.
+
+        The body log said only "parsed 55 keys" — a count cannot tell us
+        whether a given key is among them, which is exactly the question
+        when deciding where a value like the installed firmware version
+        lives. Keys only, never values: this row carries the Wi-Fi SSID and
+        other text, and these logs get pasted into public issues.
+        """
+        client = _make_client()
+        client._hubs = [MagicMock(hub_id="12345678")]
+        msg = HtsMessage(
+            sender=0x12345678,
+            receiver=client._sender_id,
+            seq_num=1,
+            link=10,
+            flags=0,
+            msg_type=MsgType.UPDATES,
+            payload=tlv_encode(
+                [
+                    b"\x09",  # sub_key 9 = STATUS_BODY
+                    bytes.fromhex("12345678"),
+                    b"\x37",  # firmware version ...
+                    b"2.41.116",
+                    b"\x27",  # ... and the SSID, which must not be logged
+                    b"MySecretNet",
+                ]
+            ),
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            await client._handle_update(msg)
+
+        assert "0x27" in caplog.text
+        assert "0x37" in caplog.text
+        assert "MySecretNet" not in caplog.text
+        assert "2.41.116" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_malformed_payload_drops_message_without_raising(self) -> None:
