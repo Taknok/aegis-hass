@@ -554,11 +554,29 @@ class TestHubInstalledFirmwareInDiagnostics:
     async def test_reported_version_is_dumped(self, coordinator: MagicMock) -> None:
         from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
 
-        coordinator.hub_network = {"hub-1": HubNetworkState(firmware_version="2.41.116")}
+        coordinator.hub_network = {
+            "hub-1": HubNetworkState(firmware_version="2.41.116", firmware_version_raw=241116)
+        }
 
         result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
 
         assert result["hub_installed_firmware"] == {"hub-1": "2.41.116"}
+        assert result["hub_installed_firmware_raw"] == {"hub-1": 241116}
+
+    @pytest.mark.asyncio
+    async def test_raw_is_dumped_even_when_the_decode_failed(self, coordinator: MagicMock) -> None:
+        # The whole point: a hub packing this differently must be answerable
+        # from the dump instead of needing a capture session.
+        from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+
+        coordinator.hub_network = {
+            "hub-1": HubNetworkState(firmware_version="", firmware_version_raw=0xDEADBEEF)
+        }
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), self._entry(coordinator))
+
+        assert result["hub_installed_firmware"] == {"hub-1": None}
+        assert result["hub_installed_firmware_raw"] == {"hub-1": 0xDEADBEEF}
 
     @pytest.mark.asyncio
     async def test_hub_that_never_reported_is_null_not_missing(

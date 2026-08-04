@@ -18,6 +18,11 @@ KEY_WIFI_LEVEL = 18
 # Ethernet (0x10/0x23–0x26/0x4A) and Wi-Fi (0x12/0x27–0x2E/0x4B) blocks.
 # `0x37` appears exactly once in the file, so nothing else can claim it.
 #
+# ⚠️ The proto declares this field `string`, but the hub sends four binary
+# bytes: a packed decimal integer, big-endian. Observed on a Hub 2 (4G)
+# Jeweller running 2.40.121: `0003a9f9` = 240121. So the app's declared type
+# describes its own transport, not this one — read it as an int32.
+#
 # Not every hub firmware puts every declared sub-key in its status body, so
 # treat absence as "unknown", never as "no firmware".
 KEY_HUB_FIRMWARE = 0x37
@@ -94,6 +99,11 @@ class HubNetworkState:
     # Installed firmware version (#388). Empty when this hub's firmware
     # doesn't report the sub-key — callers must treat "" as unknown.
     firmware_version: str = ""
+    # The packed integer the version was decoded from, kept for diagnostics.
+    # The decode rule rests on a small number of samples, so a hub that packs
+    # it differently should be answerable from a diagnostics download rather
+    # than from another capture session.
+    firmware_version_raw: int = 0
 
     @property
     def primary_connection(self) -> str:
@@ -125,6 +135,37 @@ def _byte_val(val: bytes) -> int:
 def _bool_val(val: bytes) -> bool:
     """Return True if the first byte is non-zero."""
     return bool(_byte_val(val))
+
+
+# Ajax's "no value" marker for the numeric version fields — INT32_MIN. Seen
+# on `latest_available_version` (0x69) of a hub with no update available,
+# alongside `new_version_available = false`.
+_VERSION_UNSET = 0x80000000
+
+
+def _version_val(val: bytes) -> str:
+    """Decode the hub's packed firmware version into a dotted string (#388).
+
+    The four bytes are a big-endian integer whose *decimal* digits are the
+    version components: `major * 100000 + minor * 1000 + patch`. A hub
+    running 2.40.121 sends 240121; 2.41.116 would send 241116.
+
+    Returns "" for anything that doesn't decode sensibly. The range check
+    matters more than it looks: without it any 4-byte value decodes to a
+    plausible-looking version (`deadbeef` becomes "37359.28.559"). A major
+    of 1..99 bounds the packed value to 100000..9999999, which rejects the
+    unset sentinel and arbitrary payloads alike. Callers treat "" as
+    unknown, so a hub whose firmware packs this differently degrades to
+    showing no version rather than to showing a wrong one.
+    """
+    if len(val) != 4:
+        return ""
+    packed = int.from_bytes(val, "big")
+    if not (100_000 <= packed < 10_000_000):
+        return ""
+    major, rest = divmod(packed, 100_000)
+    minor, patch = divmod(rest, 1_000)
+    return f"{major}.{minor}.{patch}"
 
 
 def _str_val(val: bytes) -> str:
@@ -421,7 +462,9 @@ def parse_hub_params(
 
     # Firmware ---------------------------------------------------------------
     if KEY_HUB_FIRMWARE in params:
-        updates["firmware_version"] = _str_val(params[KEY_HUB_FIRMWARE])
+        raw = params[KEY_HUB_FIRMWARE]
+        updates["firmware_version"] = _version_val(raw)
+        updates["firmware_version_raw"] = int.from_bytes(raw, "big") if len(raw) == 4 else 0
 
     # Ethernet ---------------------------------------------------------------
     if KEY_ETH_ENABLED in params:

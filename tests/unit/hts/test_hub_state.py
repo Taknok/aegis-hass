@@ -236,32 +236,74 @@ class TestHubFirmwareVersion:
     the HTS hub row uses — all 15 hub keys already decoded match this file,
     including the whole Ethernet and Wi-Fi blocks, and `0x37` appears exactly
     once so nothing else can claim it.
+
+    The proto types it `string`, but the wire carries four binary bytes: a
+    big-endian integer whose decimal digits are the version components. The
+    bytes below are the real ones captured from a Hub 2 (4G) Jeweller whose
+    app screen read 2.40.121 — the app screen is the ground truth here, not
+    the declared type.
     """
 
     def test_key_is_the_proto_field_number(self) -> None:
         # Pinning the constant: a wrong number here silently reads some other
-        # field's bytes as a version string, which is worse than reading none.
+        # field's bytes as a version, which is worse than reading none.
         assert KEY_HUB_FIRMWARE == 0x37
 
-    def test_version_parsed(self) -> None:
-        state = parse_hub_params({KEY_HUB_FIRMWARE: b"2.41.116"})
+    def test_captured_bytes_decode_to_the_version_the_app_showed(self) -> None:
+        # Verbatim capture: hub 2.40.121 sent 0003a9f9 (= 240121).
+        state = parse_hub_params({KEY_HUB_FIRMWARE: bytes.fromhex("0003a9f9")})
+        assert state.firmware_version == "2.40.121"
+
+    def test_three_digit_patch_and_two_digit_minor(self) -> None:
+        # 2.41.116 -> 241116. Second sample from a different hub (#379), so
+        # the rule is not fitted to one observation.
+        state = parse_hub_params({KEY_HUB_FIRMWARE: (241116).to_bytes(4, "big")})
         assert state.firmware_version == "2.41.116"
 
-    def test_null_terminated_version(self) -> None:
-        state = parse_hub_params({KEY_HUB_FIRMWARE: b"2.41.116\x00\xff\xff"})
-        assert state.firmware_version == "2.41.116"
+    def test_unset_sentinel_reads_as_unknown(self) -> None:
+        # INT32_MIN is Ajax's "no value" marker on these numeric version
+        # fields — observed on `latest_available_version` with no update
+        # available. Rendering it as a version would invent one.
+        state = parse_hub_params({KEY_HUB_FIRMWARE: bytes.fromhex("80000000")})
+        assert state.firmware_version == ""
+
+    def test_arbitrary_payload_reads_as_unknown_not_as_a_plausible_version(self) -> None:
+        # Without a range check every 4-byte value decodes to something that
+        # looks like a version: `deadbeef` becomes "37359.28.559". Showing a
+        # wrong version is worse than showing none.
+        state = parse_hub_params({KEY_HUB_FIRMWARE: bytes.fromhex("deadbeef")})
+        assert state.firmware_version == ""
+
+    def test_unexpected_width_reads_as_unknown(self) -> None:
+        # A hub that packs this differently must degrade to "no version",
+        # never to a wrong one.
+        state = parse_hub_params({KEY_HUB_FIRMWARE: b"2.40.121"})
+        assert state.firmware_version == ""
 
     def test_absent_key_leaves_previous_value(self) -> None:
-        # Firmwares differ in which sub-keys they put in STATUS_BODY, so a
+        # Firmwares differ in which sub-keys they put in each body, so a
         # frame without the key must not wipe a version we already read.
-        existing = HubNetworkState(firmware_version="2.41.116")
+        # Observed: this hub sends 0x37 in SETTINGS_BODY but not STATUS_BODY.
+        existing = HubNetworkState(firmware_version="2.40.121")
         updated = parse_hub_params({KEY_WIFI_SSID: b"Home"}, existing=existing)
-        assert updated.firmware_version == "2.41.116"
+        assert updated.firmware_version == "2.40.121"
 
     def test_default_is_empty(self) -> None:
         # A hub that never reports it must stay empty rather than inventing
         # a version — the update entity keys its behaviour on this.
         assert HubNetworkState().firmware_version == ""
+
+    def test_raw_packed_value_is_kept(self) -> None:
+        # The decode rule rests on two samples. Keeping the raw integer is
+        # what makes a hub that packs it differently diagnosable from a
+        # diagnostics download instead of needing another capture session.
+        state = parse_hub_params({KEY_HUB_FIRMWARE: bytes.fromhex("0003a9f9")})
+        assert state.firmware_version_raw == 240121
+
+    def test_raw_kept_even_when_decode_fails(self) -> None:
+        state = parse_hub_params({KEY_HUB_FIRMWARE: bytes.fromhex("deadbeef")})
+        assert state.firmware_version == ""
+        assert state.firmware_version_raw == 0xDEADBEEF
 
 
 # ---------------------------------------------------------------------------
