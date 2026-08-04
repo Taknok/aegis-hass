@@ -198,6 +198,30 @@ async def async_get_config_entry_diagnostics(
                 {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
             )
         },
+        # The version each hub says it is *running* (#388), read from its
+        # status row rather than from the Ajax cloud. `null` means the hub
+        # has not reported it — which is a real outcome, since hub firmwares
+        # differ in which sub-keys they include, so the key is emitted for
+        # every hub to keep "did not report" distinguishable from "build
+        # that never looked".
+        "hub_installed_firmware": {
+            hub_id: ((state := coordinator.hub_network.get(hub_id)) and state.firmware_version)
+            or None
+            for hub_id in sorted(
+                {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
+            )
+        },
+        # The packed integer the version above was decoded from. Dumped even
+        # when the decode failed: a hub that packs it differently is then
+        # answerable from this file instead of needing a capture session,
+        # which is what this took to work out in the first place.
+        "hub_installed_firmware_raw": {
+            hub_id: ((state := coordinator.hub_network.get(hub_id)) and state.firmware_version_raw)
+            or None
+            for hub_id in sorted(
+                {space.hub_id for space in coordinator.spaces.values() if space.hub_id}
+            )
+        },
         # Firmware update state feeding the `update.*` entities (project
         # rule: every entity-driving field is dumped here). Both maps are
         # empty most of the time — Ajax only lists a hub/device while an

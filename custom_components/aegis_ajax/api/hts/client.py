@@ -819,11 +819,19 @@ class HtsClient:
                         _format_non_hub_kv_summary(non_hub),
                     )
             if kv:
+                # Name the sub-keys, not just how many (#388). A count can't
+                # answer "does this hub report key X", which is the question
+                # whenever we're deciding where a hub-level value lives —
+                # and hub firmwares genuinely differ in what they include.
+                # Keys only, never values: this row carries the Wi-Fi SSID
+                # and other text, and these logs get pasted into public
+                # issues (see `_redact_if_text` for the same concern).
                 _LOGGER.debug(
-                    "Hub %s: parsed %d keys from %s",
+                    "Hub %s: parsed %d keys from %s: %s",
                     hub_id,
                     len(kv),
                     "SETTINGS_BODY" if sub_key == 5 else "STATUS_BODY",
+                    ",".join(f"0x{k:02x}" for k in sorted(kv)),
                 )
                 existing = self._hub_states.get(hub_id)
                 new_state = parse_hub_params(kv, existing)

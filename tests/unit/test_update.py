@@ -30,6 +30,7 @@ class TestAjaxHubFirmwareUpdate:
     def _make_coordinator(
         info: HubFirmwareUpdateInfo | None,
         hub_id: str = "002B1A51",
+        firmware_version: str | None = None,
     ) -> MagicMock:
         from custom_components.aegis_ajax.api.models import Device
         from custom_components.aegis_ajax.const import DeviceState
@@ -52,6 +53,16 @@ class TestAjaxHubFirmwareUpdate:
             )
         }
         coordinator.hub_firmware_updates = {hub_id: info} if info else {}
+        # Must be a real dict, not the MagicMock default: `.get()` on a
+        # MagicMock returns a truthy MagicMock, which would make every test
+        # here look like the hub had reported a firmware version (#388).
+        from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+
+        coordinator.hub_network = (
+            {hub_id: HubNetworkState(firmware_version=firmware_version)}
+            if firmware_version is not None
+            else {}
+        )
         return coordinator
 
     def test_unique_id_namespaced_by_hub(self) -> None:
@@ -61,13 +72,61 @@ class TestAjaxHubFirmwareUpdate:
         assert entity._attr_unique_id == "aegis_ajax_002B1A51_firmware"
 
     def test_installed_version_is_constant_placeholder(self) -> None:
-        """Ajax doesn't expose installed version; entity always reports the placeholder."""
+        """Hub has not reported its version over HTS — fall back to the placeholder.
+
+        This is the pre-#388 behaviour and it has to survive, because whether
+        the hub puts the firmware sub-key in its status body varies by hub
+        firmware.
+        """
         from custom_components.aegis_ajax.update import _INSTALLED_VERSION_PLACEHOLDER
 
         info = HubFirmwareUpdateInfo(target_version="2.17.0", state=HUB_FW_STATE_NOT_STARTED)
         coordinator = self._make_coordinator(info)
         entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
         assert entity.installed_version == _INSTALLED_VERSION_PLACEHOLDER
+
+    def test_installed_version_uses_the_hub_reported_version(self) -> None:
+        # #388: the hub reports its running firmware on the status channel
+        # (`hub_device.proto: HubDevice.Firmware.version = 0x37`), which the
+        # gRPC snapshot never carried. When we have it, say it.
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert entity.installed_version == "2.41.116"
+
+    def test_up_to_date_when_hub_version_known_and_nothing_queued(self) -> None:
+        # HA renders `unknown` unless installed and latest are both set; equal
+        # values are what produce "Up to date". With nothing queued the real
+        # version has to appear on both sides, not the placeholder.
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert entity.latest_version == "2.41.116"
+        assert entity.installed_version == entity.latest_version
+
+    def test_pending_update_compares_against_the_real_version(self) -> None:
+        info = HubFirmwareUpdateInfo(target_version="2.42.0", state=HUB_FW_STATE_NOT_STARTED)
+        coordinator = self._make_coordinator(info, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert entity.installed_version == "2.41.116"
+        assert entity.latest_version == "2.42.0"
+
+    def test_empty_hub_version_falls_back_to_placeholder(self) -> None:
+        # A hub whose firmware omits the sub-key leaves an empty string.
+        # That must behave exactly as before this change, not surface "".
+        from custom_components.aegis_ajax.update import _INSTALLED_VERSION_PLACEHOLDER
+
+        coordinator = self._make_coordinator(None, firmware_version="")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert entity.installed_version == _INSTALLED_VERSION_PLACEHOLDER
+        assert entity.latest_version == _INSTALLED_VERSION_PLACEHOLDER
+
+    def test_release_summary_drops_the_caveat_once_version_is_known(self) -> None:
+        # The old summary told users the installed version "is not exposed by
+        # Ajax". Leaving that in place while showing one would be a lie.
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        summary = entity.release_summary or ""
+        assert "2.41.116" in summary
+        assert "not exposed" not in summary
 
     def test_latest_version_reflects_pending_update(self) -> None:
         info = HubFirmwareUpdateInfo(target_version="2.17.0", state=HUB_FW_STATE_NOT_STARTED)
