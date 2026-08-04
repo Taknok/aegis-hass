@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+from custom_components.aegis_ajax.api.hts.hub_state import (
+    HTS_TEMPERATURE_DEVICE_TYPES,
+    HubNetworkState,
+)
 from custom_components.aegis_ajax.api.hub_object import SimCardInfo
 from custom_components.aegis_ajax.api.models import (
     BatteryInfo,
@@ -1057,18 +1060,11 @@ class TestTemperatureSensorCreationGate:
         return added
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "device_type",
-        [
-            "street_siren_double_deck",
-            "street_siren_s_double_deck",
-            "street_siren_double_deck_fibra",
-        ],
-    )
-    async def test_hts_sourced_siren_gets_temperature_before_first_value(
+    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
+    async def test_hts_sourced_family_gets_temperature_before_first_value(
         self, device_type: str
     ) -> None:
-        """All three Double Deck variants, with an empty snapshot."""
+        """Every HTS-sourced temperature family, with an empty snapshot."""
         added = await self._setup({"s1": self._make_device("s1", device_type)})
 
         assert "aegis_ajax_s1_temperature" in {e.unique_id for e in added}

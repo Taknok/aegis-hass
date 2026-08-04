@@ -174,6 +174,10 @@ HUB_DEVICE_TEMP_REFRESH_INTERVAL = 900  # seconds (15 min)
 # light stream.
 HUB_DEVICE_TEMPERATURE_DEVICE_TYPES = frozenset(
     {
+        "motion_protect_curtain_outdoor_plus",
+        "motion_protect_curtain_outdoor_base",
+        "motion_protect_curtain_outdoor_mini",
+        "motion_protect_outdoor",
         "street_siren",
         "street_siren_plus_g3",
         "street_siren_double_deck",
@@ -183,10 +187,6 @@ HUB_DEVICE_TEMPERATURE_DEVICE_TYPES = frozenset(
         "home_siren_g3",
         "home_siren_s",
         "home_siren_fibra",
-        "motion_protect_curtain_outdoor_base",
-        "motion_protect_curtain_outdoor_mini",
-        "motion_protect_curtain_outdoor_plus",
-        "motion_protect_outdoor",
     }
 )
 

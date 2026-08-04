@@ -619,31 +619,17 @@ class TestParseDeviceReadings:
 class TestParseDeviceTemperatureC:
     """HTS sub-key 0x02 → internal temperature for gRPC-temp-less devices (#229)."""
 
-    def test_curtain_plus_decodes_whole_celsius(self) -> None:
-        # 0x1b = 27 °C, matching the value the Ajax app shows for the Plus.
-        assert (
-            parse_device_temperature_c(
-                "motion_protect_curtain_outdoor_plus", {DEVICE_KEY_TEMPERATURE_C: b"\x1b"}
-            )
-            == 27.0
-        )
+    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
+    def test_hts_temperature_family_decodes_from_0x02(self, device_type: str) -> None:
+        # Every family in the HTS temperature gate should decode a plausible byte
+        # from sub-key 0x02 into the same whole-degree Celsius contract.
+        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\x1b"}) == 27.0
+        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\x17"}) == 23.0
 
-    def test_curtain_base_decodes(self) -> None:
-        assert (
-            parse_device_temperature_c(
-                "motion_protect_curtain_outdoor_base", {DEVICE_KEY_TEMPERATURE_C: b"\x17"}
-            )
-            == 23.0
-        )
-
-    def test_subzero_decodes_as_signed_int8(self) -> None:
-        # Outdoor detector below freezing: 0xFB = -5 °C, not 251.
-        assert (
-            parse_device_temperature_c(
-                "motion_protect_curtain_outdoor_plus", {DEVICE_KEY_TEMPERATURE_C: b"\xfb"}
-            )
-            == -5.0
-        )
+    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
+    def test_subzero_decodes_as_signed_int8(self, device_type: str) -> None:
+        # Detector below freezing: 0xFB = -5 °C, not 251.
+        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\xfb"}) == -5.0
 
     def test_non_gated_type_returns_none(self) -> None:
         # Mini gets temperature over gRPC, so it's intentionally not read here;
@@ -659,67 +645,36 @@ class TestParseDeviceTemperatureC:
             is None
         )
 
-    def test_missing_subkey_returns_none(self) -> None:
-        assert parse_device_temperature_c("motion_protect_curtain_outdoor_plus", {}) is None
+    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
+    def test_missing_subkey_returns_none(self, device_type: str) -> None:
+        assert parse_device_temperature_c(device_type, {}) is None
 
-    def test_out_of_range_value_rejected(self) -> None:
+    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
+    def test_out_of_range_value_rejected(self, device_type: str) -> None:
         # 0x7f = 127 °C is outside the plausible window → declined, not surfaced.
-        assert (
-            parse_device_temperature_c(
-                "motion_protect_curtain_outdoor_plus", {DEVICE_KEY_TEMPERATURE_C: b"\x7f"}
-            )
-            is None
-        )
+        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\x7f"}) is None
 
-    def test_gated_types_present(self) -> None:
-        assert "motion_protect_curtain_outdoor_plus" in HTS_TEMPERATURE_DEVICE_TYPES
-        assert "motion_protect_curtain_outdoor_base" in HTS_TEMPERATURE_DEVICE_TYPES
-        # Mini stays gRPC-only — it carries device_temperature in its HubDevice
-        # message and has no confirmed HTS 0x02 sample.
-        assert "motion_protect_curtain_outdoor_mini" not in HTS_TEMPERATURE_DEVICE_TYPES
-
-    def test_sirens_decode_from_0x02(self) -> None:
-        # #312/#269: sirens carry their internal temperature on HTS 0x02 (the
-        # value the Ajax app shows), confirmed for both the indoor HomeSiren and
-        # the outdoor StreetSiren. They are sourced from 0x02, not the gRPC
-        # board temperature, so the reading matches the app and updates live.
-        assert (
-            parse_device_temperature_c("street_siren", {DEVICE_KEY_TEMPERATURE_C: b"\x19"}) == 25.0
-        )
-        assert parse_device_temperature_c("home_siren", {DEVICE_KEY_TEMPERATURE_C: b"\x17"}) == 23.0
-
-    def test_siren_types_in_gated_set(self) -> None:
-        for siren_type in (
+    def test_gated_device_types_present(self) -> None:
+        for device_type in (
+            "motion_protect_curtain_outdoor_plus",
+            "motion_protect_curtain_outdoor_base",
+            "motion_protect_outdoor",
             "street_siren",
             "street_siren_plus_g3",
+            "street_siren_double_deck",
+            "street_siren_s_double_deck",
+            "street_siren_double_deck_fibra",
             "home_siren",
             "home_siren_g3",
             "home_siren_s",
             "home_siren_fibra",
         ):
-            assert siren_type in HTS_TEMPERATURE_DEVICE_TYPES
+            assert device_type in HTS_TEMPERATURE_DEVICE_TYPES
 
-    def test_motion_protect_outdoor_decodes_from_0x02(self) -> None:
-        # #269: MotionProtect Outdoor Jeweller carries no temperature on the
-        # light stream. A reporter's STATUS_BODY capture showed 0x02 on every
-        # candidate row with plausible ambient values (0x1d = 29 °C, 0x1a =
-        # 26 °C in July), so the family is sourced from HTS like the Curtain
-        # Outdoor Plus/Base.
-        assert (
-            parse_device_temperature_c(
-                "motion_protect_outdoor", {DEVICE_KEY_TEMPERATURE_C: b"\x1d"}
-            )
-            == 29.0
-        )
-        assert (
-            parse_device_temperature_c(
-                "motion_protect_outdoor", {DEVICE_KEY_TEMPERATURE_C: b"\x1a"}
-            )
-            == 26.0
-        )
-
-    def test_motion_protect_outdoor_in_gated_set(self) -> None:
-        assert "motion_protect_outdoor" in HTS_TEMPERATURE_DEVICE_TYPES
+        # Mini stays gRPC-only — it carries device_temperature in its HubDevice
+        # message and has no confirmed HTS 0x02 sample.
+        for device_type in ("motion_protect_curtain_outdoor_mini",):
+            assert device_type not in HTS_TEMPERATURE_DEVICE_TYPES
 
     def test_hts_set_is_subset_of_carry_forward_set(self) -> None:
         # Every HTS-sourced family must also be in the coordinator's
