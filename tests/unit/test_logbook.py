@@ -98,6 +98,60 @@ class TestLogbookDescriptions:
         result = handler(_make_event("fire", device_name="Kitchen"))
         assert "Fire" in result[LOGBOOK_ENTRY_MESSAGE]
 
+    def test_arm_with_malfunctions_says_so(self) -> None:
+        # #387: the Ajax app reports "activated with malfunction", but the
+        # logbook read as an ordinary arm. `event_type` is deliberately
+        # normalised to "arm" so automations keep matching, and the detail
+        # survives only on `raw_tag` — which the logbook was ignoring.
+        handler = self._get_handler()
+        result = handler(
+            _make_event("arm", device_name="App User", raw_tag="space_armed_with_malfunctions")
+        )
+        assert "Armed" in result[LOGBOOK_ENTRY_MESSAGE]
+        assert "App User" in result[LOGBOOK_ENTRY_MESSAGE]
+        assert "malfunction" in result[LOGBOOK_ENTRY_MESSAGE].lower()
+
+    def test_night_arm_with_malfunctions_says_so(self) -> None:
+        # The same qualifier exists on night mode, so the marker has to key
+        # on the tag rather than on the arm description.
+        handler = self._get_handler()
+        result = handler(
+            _make_event(
+                "arm_night",
+                device_name="Keypad",
+                raw_tag="space_night_mode_on_with_malfunctions",
+            )
+        )
+        assert "Night mode armed" in result[LOGBOOK_ENTRY_MESSAGE]
+        assert "malfunction" in result[LOGBOOK_ENTRY_MESSAGE].lower()
+
+    def test_clean_arm_does_not_mention_malfunctions(self) -> None:
+        # The negative control: a normal arm must read exactly as before.
+        handler = self._get_handler()
+        result = handler(_make_event("arm", device_name="Keypad", raw_tag="space_armed"))
+        assert "malfunction" not in result[LOGBOOK_ENTRY_MESSAGE].lower()
+
+    def test_malfunction_event_type_is_not_double_marked(self) -> None:
+        # `malfunction` is its own event type with its own description; the
+        # suffix is about an *arm* that happened despite one, so a plain
+        # malfunction event must not gain a second mention.
+        handler = self._get_handler()
+        result = handler(_make_event("malfunction", device_name="Door Protect"))
+        assert result[LOGBOOK_ENTRY_MESSAGE].lower().count("malfunction") == 1
+
+    def test_room_name_still_appended_with_malfunctions(self) -> None:
+        handler = self._get_handler()
+        result = handler(
+            _make_event(
+                "arm",
+                device_name="Keypad",
+                room_name="Hall",
+                raw_tag="space_armed_with_malfunctions",
+            )
+        )
+        assert "(Hall)" in result[LOGBOOK_ENTRY_MESSAGE]
+        assert "malfunction" in result[LOGBOOK_ENTRY_MESSAGE].lower()
+
     def test_all_event_types_have_descriptions(self) -> None:
         for event_type in ALL_EVENT_TYPES:
             assert event_type in _EVENT_DESCRIPTIONS, f"Missing description for {event_type}"
