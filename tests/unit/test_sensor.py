@@ -1009,3 +1009,103 @@ class TestRemoveOrphanOutletPowerDerived:
             _remove_orphan_outlet_power_derived(MagicMock(), coordinator)
 
         registry.async_remove.assert_not_called()
+
+
+class TestTemperatureSensorCreationGate:
+    """The temperature entity must exist before its first HTS value arrives.
+
+    A device whose temperature is sourced from the hub's status stream
+    (HTS sub-key 0x02) has no `temperature` in the gRPC snapshot at
+    startup, so gating entity creation on `key in device.statuses` meant
+    the entity was never created and the value had nowhere to land.
+    Membership of `HTS_TEMPERATURE_DEVICE_TYPES` is the guarantee that a
+    source exists, so it — not the current snapshot — decides creation.
+    """
+
+    @staticmethod
+    def _make_device(device_id: str, device_type: str, statuses: dict | None = None) -> Device:
+        return Device(
+            id=device_id,
+            hub_id="hub-1",
+            name=f"Device {device_id}",
+            device_type=device_type,
+            room_id=None,
+            group_id=None,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses=statuses or {},
+            battery=None,
+        )
+
+    @staticmethod
+    async def _setup(devices: dict[str, Device]) -> list:
+        from custom_components.aegis_ajax.sensor import async_setup_entry
+
+        coordinator = MagicMock()
+        coordinator.devices = devices
+        coordinator.rooms = {}
+        coordinator.spaces = {}
+        coordinator.sim_info = {}
+
+        entry = MagicMock()
+        entry.runtime_data = coordinator
+        added: list = []
+
+        with patch("custom_components.aegis_ajax.sensor._remove_orphan_outlet_power_derived"):
+            await async_setup_entry(MagicMock(), entry, added.extend)
+        return added
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "device_type",
+        [
+            "street_siren_double_deck",
+            "street_siren_s_double_deck",
+            "street_siren_double_deck_fibra",
+        ],
+    )
+    async def test_hts_sourced_siren_gets_temperature_before_first_value(
+        self, device_type: str
+    ) -> None:
+        """All three Double Deck variants, with an empty snapshot."""
+        added = await self._setup({"s1": self._make_device("s1", device_type)})
+
+        assert "aegis_ajax_s1_temperature" in {e.unique_id for e in added}
+
+    @pytest.mark.asyncio
+    async def test_grpc_only_family_gets_no_temperature_until_a_value_arrives(self) -> None:
+        """The Curtain Outdoor Mini must stay excluded (#269).
+
+        It is the one member of `HUB_DEVICE_TEMPERATURE_DEVICE_TYPES`
+        with no HTS source, so creating its entity up front would leave
+        a permanently `unknown` sensor that Home Assistant never evicts.
+        """
+        added = await self._setup(
+            {"m1": self._make_device("m1", "motion_protect_curtain_outdoor_mini")}
+        )
+
+        assert "aegis_ajax_m1_temperature" not in {e.unique_id for e in added}
+
+    @pytest.mark.asyncio
+    async def test_grpc_only_family_still_gets_temperature_once_reported(self) -> None:
+        """The exclusion is about *timing*, not about dropping the family."""
+        added = await self._setup(
+            {
+                "m1": self._make_device(
+                    "m1", "motion_protect_curtain_outdoor_mini", {"temperature": 18.0}
+                )
+            }
+        )
+
+        assert "aegis_ajax_m1_temperature" in {e.unique_id for e in added}
+
+    @pytest.mark.asyncio
+    async def test_gate_does_not_leak_to_other_status_keys(self) -> None:
+        """Only `temperature` is pre-created; the rest still need a value."""
+        added = await self._setup({"s1": self._make_device("s1", "street_siren_double_deck")})
+
+        unique_ids = {e.unique_id for e in added}
+        assert "aegis_ajax_s1_humidity" not in unique_ids
+        assert "aegis_ajax_s1_co2" not in unique_ids
+        assert "aegis_ajax_s1_signal_strength" not in unique_ids

@@ -26,6 +26,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from custom_components.aegis_ajax.api.hts.hub_state import (
     DIRECT_POWER_DEVICE_TYPES,
     ELECTRICAL_DEVICE_TYPES,
+    HTS_TEMPERATURE_DEVICE_TYPES,
 )
 from custom_components.aegis_ajax.api.models import MonitoringCompanyStatus
 from custom_components.aegis_ajax.coordinator import AjaxCobrandedCoordinator
@@ -124,6 +125,12 @@ async def async_setup_entry(
 ) -> None:
     coordinator: AjaxCobrandedCoordinator = entry.runtime_data
     entities: list[SensorEntity] = []
+
+    def _should_create_status_sensor(device: Device, key: str) -> bool:
+        if key == "temperature" and device.device_type in HTS_TEMPERATURE_DEVICE_TYPES:
+            return True
+        return key in device.statuses
+
     for device_id, device in coordinator.devices.items():
         if device.battery is not None:
             entities.append(
@@ -138,7 +145,7 @@ async def async_setup_entry(
             "wifi_signal_level",
         )
         for key in _status_sensor_keys:
-            if key in device.statuses:
+            if _should_create_status_sensor(device, key):
                 entities.append(
                     AjaxSensor(coordinator=coordinator, device_id=device_id, sensor_key=key)
                 )

@@ -12,8 +12,8 @@ from custom_components.aegis_ajax.alarm_control_panel import (
     AjaxGroupAlarmControlPanel,
     map_security_state,
 )
-from custom_components.aegis_ajax.api.models import Group, Space
-from custom_components.aegis_ajax.const import ConnectionStatus, SecurityState
+from custom_components.aegis_ajax.api.models import Device, Group, Space
+from custom_components.aegis_ajax.const import ConnectionStatus, DeviceState, SecurityState
 
 
 class TestMapSecurityState:
@@ -621,3 +621,120 @@ class TestAsyncSetupEntry:
         assert len(space_panels) == 1
         assert len(group_panels) == 2
         assert {p._group_id for p in group_panels} == {"g1", "g2"}
+
+
+class TestGroupMembershipAttributes:
+    """#366 — which devices belong to a group, readable from Home Assistant.
+
+    Group membership was only visible in the Ajax mobile app, so a finding
+    about a device's group (#348's siren activity counter) could not be
+    reproduced from Home Assistant alone. Rooms don't answer it: a device
+    has a room and a group independently.
+    """
+
+    @staticmethod
+    def _space() -> Space:
+        return Space(
+            id="s1",
+            hub_id="h1",
+            name="Home",
+            security_state=SecurityState.PARTIALLY_ARMED,
+            connection_status=ConnectionStatus.ONLINE,
+            malfunctions_count=0,
+            groups=(
+                Group(
+                    id="g1",
+                    space_id="s1",
+                    name="Villa",
+                    security_state=SecurityState.DISARMED,
+                    sorting_key="g1",
+                ),
+                Group(
+                    id="g2",
+                    space_id="s1",
+                    name="Garage",
+                    security_state=SecurityState.ARMED,
+                    sorting_key="g2",
+                ),
+            ),
+            group_mode_enabled=True,
+        )
+
+    @staticmethod
+    def _device(did: str, name: str, group_id: str | None) -> Device:
+        return Device(
+            id=did,
+            hub_id="h1",
+            name=name,
+            device_type="door_protect",
+            room_id=None,
+            group_id=group_id,
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+
+    def _panel(
+        self, devices: dict[str, Device], group_id: str = "g1"
+    ) -> AjaxGroupAlarmControlPanel:
+        coordinator = MagicMock()
+        coordinator.config_entry.options = {}
+        coordinator.spaces = {"s1": self._space()}
+        coordinator.devices = devices
+        coordinator.rooms = {}
+        return AjaxGroupAlarmControlPanel(coordinator=coordinator, space_id="s1", group_id=group_id)
+
+    def test_lists_only_its_own_members(self) -> None:
+        panel = self._panel(
+            {
+                "d1": self._device("d1", "Front Door", "g1"),
+                "d2": self._device("d2", "Garage Door", "g2"),
+                "d3": self._device("d3", "Hall Motion", "g1"),
+            }
+        )
+
+        attrs = panel.extra_state_attributes
+
+        assert attrs["member_device_ids"] == ["d1", "d3"]
+        assert attrs["member_device_names"] == ["Front Door", "Hall Motion"]
+
+    def test_members_are_sorted_by_name(self) -> None:
+        """Attribute order is user-visible, so it must not follow dict order."""
+        panel = self._panel(
+            {
+                "d1": self._device("d1", "Zebra", "g1"),
+                "d2": self._device("d2", "Alpha", "g1"),
+            }
+        )
+
+        assert panel.extra_state_attributes["member_device_names"] == ["Alpha", "Zebra"]
+
+    def test_ungrouped_devices_are_never_listed(self) -> None:
+        panel = self._panel(
+            {
+                "d1": self._device("d1", "Front Door", "g1"),
+                "d2": self._device("d2", "Loose Sensor", None),
+            }
+        )
+
+        assert panel.extra_state_attributes["member_device_ids"] == ["d1"]
+
+    def test_empty_group_reports_an_empty_list_not_a_missing_key(self) -> None:
+        """A template reading the attribute must not have to guard for absence."""
+        panel = self._panel({"d2": self._device("d2", "Garage Door", "g2")})
+
+        attrs = panel.extra_state_attributes
+
+        assert attrs["member_device_ids"] == []
+        assert attrs["member_device_names"] == []
+
+    def test_existing_attributes_are_preserved(self) -> None:
+        panel = self._panel({"d1": self._device("d1", "Front Door", "g1")})
+
+        attrs = panel.extra_state_attributes
+
+        assert attrs["group_id"] == "g1"
+        assert attrs["group_name"] == "Villa"
+        assert attrs["hub_id"] == "h1"

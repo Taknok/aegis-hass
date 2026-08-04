@@ -537,12 +537,28 @@ class AjaxGroupAlarmControlPanel(_AjaxAlarmPanelBase):
         group = self._group
         if space is None or group is None:
             return {}
+        members = sorted(
+            (d for d in self.coordinator.devices.values() if d.group_id == group.id),
+            key=lambda d: d.name,
+        )
         return {
             "hub_id": space.hub_id,
             "space_id": space.id,
             "group_id": group.id,
             "group_name": group.name,
             "connection_status": space.connection_status.name,
+            # Which devices are in this group (#366). Ajax group membership
+            # was readable only from the mobile app, so a finding about a
+            # device's group — such as #348's siren activity counter — could
+            # not be reproduced from Home Assistant alone. Rooms do not answer
+            # it: a device has a room and a group independently.
+            #
+            # It lives here, on the one entity that already exists per group,
+            # rather than as an attribute on every device's entities: there is
+            # no shared entity base to hang that on today, and adding one is
+            # #332's job. Template the inverse when you need it per device.
+            "member_device_ids": [d.id for d in members],
+            "member_device_names": [d.name for d in members],
         }
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
