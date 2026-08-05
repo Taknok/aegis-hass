@@ -26,6 +26,8 @@ from homeassistant.components.update import (
     UpdateEntity,
     UpdateEntityFeature,
 )
+from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from custom_components.aegis_ajax.api.hub_object import (
@@ -37,6 +39,7 @@ from custom_components.aegis_ajax.api.hub_object import (
     DeviceFirmwareUpdateInfo,
     HubFirmwareUpdateInfo,
 )
+from custom_components.aegis_ajax.const import DOMAIN
 from custom_components.aegis_ajax.coordinator import AjaxCobrandedCoordinator
 from custom_components.aegis_ajax.entity import build_device_info
 
@@ -108,7 +111,47 @@ class AjaxHubFirmwareUpdate(CoordinatorEntity[AjaxCobrandedCoordinator], UpdateE
         self._attr_unique_id = f"aegis_ajax_{hub_id}_firmware"
         hub_device = coordinator.devices.get(hub_id)
         if hub_device:
-            self._attr_device_info = build_device_info(hub_device, coordinator.rooms)
+            self._attr_device_info = build_device_info(
+                hub_device,
+                coordinator.rooms,
+                firmware_version=self._hub_reported_version,
+            )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Covers the case where the version landed between construction and
+        # the entity actually being added — `device_info` was already read
+        # by then, so the registry needs telling either way.
+        self._async_write_sw_version()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._async_write_sw_version()
+        super()._handle_coordinator_update()
+
+    @callback
+    def _async_write_sw_version(self) -> None:
+        """Push the hub's reported firmware into the device registry (#388).
+
+        Home Assistant reads `device_info` exactly once, in
+        `entity_platform._async_add_entity`, and hands it to
+        `async_get_or_create`; it is never consulted again. The hub reports
+        its firmware over HTS, whose handshake is still in flight when the
+        platforms are forwarded, so the version is essentially never known
+        at that moment. Writing it to the registry as it arrives is what
+        actually gets it onto the hub's device page, and it keeps following
+        the hub across firmware upgrades.
+        """
+        version = self._hub_reported_version
+        if not version:
+            return
+        registry = dr.async_get(self.hass)
+        entry = registry.async_get_device(identifiers={(DOMAIN, self._hub_id)})
+        # Guard on equality so a steady stream of HTS updates doesn't write
+        # to (and re-save) the registry on every coordinator tick.
+        if entry is None or entry.sw_version == version:
+            return
+        registry.async_update_device(entry.id, sw_version=version)
 
     @property
     def _info(self) -> HubFirmwareUpdateInfo | None:

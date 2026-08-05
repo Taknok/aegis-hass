@@ -128,6 +128,105 @@ class TestAjaxHubFirmwareUpdate:
         assert "2.41.116" in summary
         assert "not exposed" not in summary
 
+    def test_device_info_includes_hub_reported_firmware_when_known_early(self) -> None:
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert (entity._attr_device_info or {}).get("sw_version") == "2.41.116"
+
+    def test_no_sw_version_in_device_info_when_firmware_not_yet_reported(self) -> None:
+        coordinator = self._make_coordinator(None)
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert "sw_version" not in (entity._attr_device_info or {})
+
+    def _registry(
+        self, entity: AjaxHubFirmwareUpdate, *, sw_version: str | None = None
+    ) -> MagicMock:
+        """Attach a fake device registry and return it.
+
+        `dr.async_get` is patched per-test rather than using a real registry:
+        these are plain unit tests with a MagicMock coordinator and no running
+        HA instance.
+        """
+        registry = MagicMock()
+        registry.async_get_device.return_value = MagicMock(id="reg-1", sw_version=sw_version)
+        entity.hass = MagicMock()
+        return registry
+
+    def test_firmware_reported_after_setup_is_written_to_the_registry(self) -> None:
+        # The real timing: HTS is still handshaking when platforms are
+        # forwarded, so `device_info` — which HA reads exactly once, at add
+        # time — never carries the version. It has to be pushed to the
+        # registry as it arrives (#388).
+        from unittest.mock import patch
+
+        from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+
+        coordinator = self._make_coordinator(None)
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        registry = self._registry(entity)
+
+        coordinator.hub_network = {"002B1A51": HubNetworkState(firmware_version="2.41.116")}
+
+        with patch("custom_components.aegis_ajax.update.dr.async_get", return_value=registry):
+            entity._async_write_sw_version()
+
+        registry.async_update_device.assert_called_once_with("reg-1", sw_version="2.41.116")
+
+    def test_registry_is_not_written_when_version_is_unchanged(self) -> None:
+        # HTS pushes hub status rows continuously; rewriting an identical
+        # value on every tick would re-save the device registry for nothing.
+        from unittest.mock import patch
+
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        registry = self._registry(entity, sw_version="2.41.116")
+
+        with patch("custom_components.aegis_ajax.update.dr.async_get", return_value=registry):
+            entity._async_write_sw_version()
+
+        registry.async_update_device.assert_not_called()
+
+    def test_registry_is_not_written_when_no_version_reported(self) -> None:
+        from unittest.mock import patch
+
+        coordinator = self._make_coordinator(None)
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        registry = self._registry(entity)
+
+        with patch("custom_components.aegis_ajax.update.dr.async_get", return_value=registry):
+            entity._async_write_sw_version()
+
+        registry.async_update_device.assert_not_called()
+
+    def test_registry_write_is_skipped_when_hub_not_in_registry(self) -> None:
+        from unittest.mock import patch
+
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        registry = MagicMock()
+        registry.async_get_device.return_value = None
+        entity.hass = MagicMock()
+
+        with patch("custom_components.aegis_ajax.update.dr.async_get", return_value=registry):
+            entity._async_write_sw_version()
+
+        registry.async_update_device.assert_not_called()
+
+    def test_coordinator_update_syncs_the_registry(self) -> None:
+        # The write has to be wired to the coordinator callback, not just
+        # available as a helper.
+        from unittest.mock import patch
+
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        registry = self._registry(entity)
+        entity.async_write_ha_state = MagicMock()
+
+        with patch("custom_components.aegis_ajax.update.dr.async_get", return_value=registry):
+            entity._handle_coordinator_update()
+
+        registry.async_update_device.assert_called_once_with("reg-1", sw_version="2.41.116")
+
     def test_latest_version_reflects_pending_update(self) -> None:
         info = HubFirmwareUpdateInfo(target_version="2.17.0", state=HUB_FW_STATE_NOT_STARTED)
         coordinator = self._make_coordinator(info)
