@@ -730,6 +730,57 @@ class TestAsyncUpdateData:
             await coordinator._async_update_data()
 
     @pytest.mark.asyncio
+    async def test_update_data_raises_auth_failed_when_relogin_needs_2fa(self) -> None:
+        """A fresh login that needs 2FA must open the reauth flow, not retry forever.
+
+        `TwoFactorRequiredError` is not an `AuthenticationError` subclass, so
+        without an explicit branch it fell through to the generic
+        `UpdateFailed` handler. HA then retried setup indefinitely, and every
+        retry asked Ajax for a new 2FA code — invalidating the code the user
+        was typing into the reconfigure form.
+        """
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.aegis_ajax.api.session import TwoFactorRequiredError
+
+        coordinator = _make_coordinator()
+        coordinator._client.session.is_authenticated = False
+        coordinator._client.login = AsyncMock(side_effect=TwoFactorRequiredError("req-1"))
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_update_data_raises_auth_failed_when_token_rejected_and_relogin_needs_2fa(
+        self,
+    ) -> None:
+        """The stale-token recovery path must also route 2FA to the reauth flow.
+
+        This is the path a user hits after revoking sessions in the Ajax app:
+        the stored token is rejected, the forced re-login needs a 2FA code.
+        """
+        import grpc
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.aegis_ajax.api.session import TwoFactorRequiredError
+
+        coordinator = _make_coordinator()
+        coordinator._client.session.is_authenticated = True
+
+        unauth = grpc.aio.AioRpcError(  # type: ignore[call-arg]
+            code=grpc.StatusCode.UNAUTHENTICATED,
+            initial_metadata=grpc.aio.Metadata(),
+            trailing_metadata=grpc.aio.Metadata(),
+            details="User is not authenticated",
+        )
+        coordinator._spaces_api = MagicMock()
+        coordinator._spaces_api.list_spaces = AsyncMock(side_effect=unauth)
+        coordinator._client.login = AsyncMock(side_effect=TwoFactorRequiredError("req-1"))
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
     async def test_login_persists_session_via_callback(self) -> None:
         """A successful login pushes the new token through on_session_persist."""
         coordinator = _make_coordinator()
