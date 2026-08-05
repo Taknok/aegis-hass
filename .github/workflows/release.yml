@@ -51,3 +51,15 @@ jobs:
         with:
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           body: ${{ steps.changelog.outputs.notes }}
+
+  # Refresh the bug-report form's version dropdown once the release exists.
+  # Called explicitly rather than left to `release: published`, which never
+  # fires for a release created with the default GITHUB_TOKEN — see the note in
+  # update-version-dropdown.yml. A separate job on purpose: the release is
+  # already published by the time this runs, so if refreshing the form fails it
+  # shows up as a red job to fix rather than as a broken release.
+  version-dropdown:
+    needs: release
+    uses: ./.github/workflows/update-version-dropdown.yml
+    permissions:
+      contents: write
