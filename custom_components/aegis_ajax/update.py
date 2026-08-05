@@ -108,7 +108,11 @@ class AjaxHubFirmwareUpdate(CoordinatorEntity[AjaxCobrandedCoordinator], UpdateE
         self._attr_unique_id = f"aegis_ajax_{hub_id}_firmware"
         hub_device = coordinator.devices.get(hub_id)
         if hub_device:
-            self._attr_device_info = build_device_info(hub_device, coordinator.rooms)
+            self._attr_device_info = build_device_info(
+                hub_device,
+                coordinator.rooms,
+                self._hub_reported_version,
+            )
 
     @property
     def _info(self) -> HubFirmwareUpdateInfo | None:

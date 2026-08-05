@@ -30,6 +30,7 @@ _MODEL_OVERRIDES: dict[str, str] = {
 def build_device_info(
     device: Device,
     rooms: Mapping[str, Room] | None = None,
+    firmware_version: str | None = None,
 ) -> DeviceInfo:
     """Build a HA DeviceInfo for an Ajax device.
 
@@ -53,6 +54,8 @@ def build_device_info(
         room = rooms.get(device.room_id) if isinstance(rooms, dict) else None
         if room is not None:
             info["suggested_area"] = room.name
+    if firmware_version:
+        info["sw_version"] = firmware_version
     return info
 
 
