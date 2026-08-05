@@ -83,11 +83,16 @@ class TestParseDevice:
         codes come through (#179 follow-up).
 
         The original probe in beta.6 redacted any printable-ASCII run ≥3
-        chars, which hid exactly the 3-char strings we needed to identify
-        whether SaetanSaDiablo's 18 unsupported LightDevice events were
-        encoding state codes (`OFF`/`ON`/etc) or just a device-id reference.
-        A 7-byte proto has no room for a user-set name / room / email
-        anyway, so raw hex is privacy-safe at this size.
+        chars, which hid exactly the 3-char strings needed to tell whether
+        the unsupported LightDevice events encoded state codes or just a
+        reference. A 7-byte proto has no room for a user-set name / room /
+        email anyway, so raw hex is privacy-safe at this size — and that
+        threshold is what eventually answered #383.
+
+        Uses **field 6**, not the field 5 this originally probed: field 5 is
+        now identified as the space's access-card count and is recognised
+        before this path, so a field-5 payload no longer reaches the probe.
+        See `TestAccessCardsCountRecord`.
         """
         import logging as _logging  # noqa: PLC0415
 
@@ -95,10 +100,10 @@ class TestParseDevice:
             light_device_pb2,
         )
 
-        # 7-byte proto mimicking the actual capture shape: field=5
+        # 7-byte proto in the same shape as a real capture: field=6
         # length-delimited (5 bytes) → field=2 length-delimited (3 ASCII
         # bytes 'O', 'F', 'F').
-        unknown_field = bytes([0x2A, 0x05, 0x12, 0x03, 0x4F, 0x46, 0x46])
+        unknown_field = bytes([0x32, 0x05, 0x12, 0x03, 0x4F, 0x46, 0x46])
         proto_device = light_device_pb2.LightDevice()
         proto_device.MergeFromString(unknown_field)
         assert proto_device.WhichOneof("device") is None
@@ -109,7 +114,7 @@ class TestParseDevice:
         bytes_line = next(record.message for record in caplog.records if "bytes:" in record.message)
         # Full raw hex must be visible — no `<text:Nb>` masking on a tiny
         # protocol-state envelope.
-        assert "2a051203" in bytes_line
+        assert "32051203" in bytes_line
         assert "4f4646" in bytes_line  # 'OFF' in ASCII bytes
         assert "<text:" not in bytes_line
 
@@ -266,6 +271,77 @@ class TestParseDevice:
         assert any("Skipping unsupported device type" in r.message for r in caplog.records)
         assert not any("wire-shape" in r.message for r in caplog.records)
         assert not any("bytes:" in r.message for r in caplog.records)
+
+
+class TestAccessCardsCountRecord:
+    """The 5th `LightDevice` oneof case is the space's access-card count (#383).
+
+    It is not a device and must not be reported as an unrecognised one: the
+    stream carries exactly one per full device-list fetch, on every install.
+    Both byte strings below are real captures, unmodified.
+    """
+
+    # @wip3out3r's hub: f5={f2:"5_0"} — no count field at all, i.e. 0 cards,
+    # which matches his inventory (no keypad, no access cards).
+    NO_CARDS = bytes.fromhex("2a051203355f30")
+    # bvis-home: f5={f1:6, f2:"5_0"} — six access cards on that account.
+    SIX_CARDS = bytes.fromhex("2a0708061203355f30")
+
+    def _parse(self, raw: bytes, caplog: pytest.LogCaptureFixture) -> Device | None:
+        import logging as _logging  # noqa: PLC0415
+
+        from v3.mobilegwsvc.commonmodels.space.device.light import (  # noqa: PLC0415
+            light_device_pb2,
+        )
+
+        # Field 5 is absent from our compiled proto, so it lands in unknown
+        # fields — exactly as it does live.
+        proto_device = light_device_pb2.LightDevice.FromString(raw)
+        with caplog.at_level(_logging.DEBUG, logger="custom_components.aegis_ajax.api.devices"):
+            return DevicesApi.parse_device(proto_device)
+
+    def test_zero_cards_is_recognised_and_not_called_unsupported(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        assert self._parse(self.NO_CARDS, caplog) is None
+        assert "access-card count" in caplog.text
+        assert "count=0" in caplog.text
+        assert "Unsupported LightDevice" not in caplog.text
+        assert "Skipping unsupported device type" not in caplog.text
+
+    def test_the_count_is_reported(self, caplog: pytest.LogCaptureFixture) -> None:
+        assert self._parse(self.SIX_CARDS, caplog) is None
+        assert "count=6" in caplog.text
+        assert "Unsupported LightDevice" not in caplog.text
+
+    def test_a_genuinely_unknown_case_still_hits_the_probe(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Field 6 — a real new oneof case would look like this, and must keep
+        # surfacing its shape and bytes.
+        assert self._parse(bytes.fromhex("32020801"), caplog) is None
+        assert "Unsupported LightDevice" in caplog.text
+        assert "f6=bytes(2)" in caplog.text
+
+    def test_field_5_with_an_unexpected_member_falls_through_to_the_probe(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # f5={f3:1} — same field number, different contents. Recognising it as
+        # the access-card count would hide a change in the record, so the probe
+        # must still fire.
+        assert self._parse(bytes.fromhex("2a021801"), caplog) is None
+        assert "Unsupported LightDevice" in caplog.text
+        assert "access-card count" not in caplog.text
+
+    def test_field_5_alongside_another_field_falls_through_to_the_probe(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The recogniser requires field 5 to be the *only* top-level field, so
+        # a record that merely includes it is not mistaken for the count.
+        # `+ 3001` appends a field 6 varint.
+        assert self._parse(self.NO_CARDS + bytes.fromhex("3001"), caplog) is None
+        assert "Unsupported LightDevice" in caplog.text
+        assert "access-card count" not in caplog.text
 
 
 class TestDecodeProtoWireShape:

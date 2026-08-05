@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
 
 ### Fixed
+- **A routine record in the hub's device list is no longer reported as something the integration couldn't handle (#383).** One entry in that list arrives in a shape our copy of the protocol doesn't describe, and the debug log called it an *unsupported device*. It turns out not to be a device at all: it is the space's **access-card count** — how many cards or tags exist, plus the key the Ajax app sorts them by — which is why it appears exactly once per full refresh whatever your system contains, and why the installation it was first seen on had no hardware matching it.
+
+  The log line now says what the record is and reports the count, instead of dumping bytes under a heading that implied something was wrong. Nothing was ever broken: no entity was affected, and skipping the record is still the right thing to do since a count of credentials is not a device. Two installations confirmed the reading independently — one with access tags reports a count, and @wip3out3r's, with no keypad and no cards, reports none at all. Found and fully decoded by @wip3out3r.
+
+  A record that is *not* this one still gets the full diagnostic treatment, deliberately: the recogniser is strict, so a genuinely new variant surfaces its structure rather than being quietly absorbed.
+
 - **The hub IMEI sensor is now created whether or not the SIM read has succeeded yet (#379).** It was only offered for hubs the integration had already read SIM details from, so a read that failed or had not completed produced no entity at all — and because Home Assistant never removes an entity an integration stops offering, one created on an earlier start sat `unavailable` indefinitely with nothing to explain it. Creation now follows from the hub being present; whether the SIM details are readable is left to the entity's availability, which is what availability is for.
 
   The sensor is disabled by default, as before, so a hub that never reports SIM details does not gain a visible dead entity. Fixed by @aavdberg, who reported the issue and sent the fix.
