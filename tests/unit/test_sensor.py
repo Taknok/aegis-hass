@@ -1128,7 +1128,14 @@ class TestTemperatureSensorCreationGate:
     async def test_hts_sourced_family_gets_temperature_before_first_value(
         self, device_type: str
     ) -> None:
-        """Every HTS-sourced temperature family, with an empty snapshot."""
+        """Every HTS-sourced temperature family, with an empty snapshot.
+
+        The empty snapshot is the point: #375 created the entity only when a
+        value was already present, so an HTS-sourced family never got one and
+        the reading had nowhere to land. The three Double Deck variants are the
+        original regression case; sweeping the whole gate means a family added
+        later is covered without anyone remembering to extend a list.
+        """
         added = await self._setup({"s1": self._make_device("s1", device_type)})
 
         assert "aegis_ajax_s1_temperature" in {e.unique_id for e in added}

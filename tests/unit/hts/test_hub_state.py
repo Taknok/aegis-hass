@@ -701,20 +701,79 @@ class TestParseDeviceReadings:
         assert r.power_w is None
 
 
+# Values actually OBSERVED on hardware, per family, with where each came from.
+# These are evidence that the family reports 0x02 at all — not just that the
+# decoder works, which is family-agnostic and covered once below.
+_CONFIRMED_HTS_TEMPERATURE_SAMPLES: dict[str, tuple[bytes, float]] = {
+    # 0x1b = 27 °C, matching the value the Ajax app showed for the Plus (#229).
+    "motion_protect_curtain_outdoor_plus": (b"\x1b", 27.0),
+    "motion_protect_curtain_outdoor_base": (b"\x17", 23.0),
+    # #269: a reporter's STATUS_BODY capture showed 0x02 on every candidate row
+    # with plausible ambient values (0x1d = 29 °C in July).
+    "motion_protect_outdoor": (b"\x1d", 29.0),
+    # #312/#269: sirens carry their internal temperature on 0x02 — the value the
+    # app shows — not the gRPC board temperature, so it matches and updates live.
+    "street_siren": (b"\x19", 25.0),
+    "home_siren": (b"\x17", 23.0),
+}
+
+# Families in the production gate with no recorded byte-level sample. They are
+# there by family membership rather than by capture, which is a legitimate basis
+# (#375) but a weaker one — listing them here keeps that distinction visible.
+# @Taknok confirmed the reading works on real Double Deck hardware (#375); the
+# byte value was simply never written down. If anyone captures one, move the
+# family up into the dict above.
+_INFERRED_HTS_TEMPERATURE_FAMILIES: frozenset[str] = frozenset(
+    {
+        "street_siren_double_deck",
+        "street_siren_s_double_deck",
+        "street_siren_double_deck_fibra",
+        "street_siren_plus_g3",
+        "home_siren_g3",
+        "home_siren_s",
+        "home_siren_fibra",
+    }
+)
+
+
 class TestParseDeviceTemperatureC:
     """HTS sub-key 0x02 → internal temperature for gRPC-temp-less devices (#229)."""
 
-    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
-    def test_hts_temperature_family_decodes_from_0x02(self, device_type: str) -> None:
-        # Every family in the HTS temperature gate should decode a plausible byte
-        # from sub-key 0x02 into the same whole-degree Celsius contract.
-        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\x1b"}) == 27.0
-        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\x17"}) == 23.0
+    @pytest.mark.parametrize(
+        ("device_type", "raw", "expected"),
+        [(dt, raw, exp) for dt, (raw, exp) in sorted(_CONFIRMED_HTS_TEMPERATURE_SAMPLES.items())],
+    )
+    def test_confirmed_sample_decodes_to_the_observed_value(
+        self, device_type: str, raw: bytes, expected: float
+    ) -> None:
+        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: raw}) == expected
 
-    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
-    def test_subzero_decodes_as_signed_int8(self, device_type: str) -> None:
-        # Detector below freezing: 0xFB = -5 °C, not 251.
-        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\xfb"}) == -5.0
+    def test_every_gated_family_is_either_confirmed_or_declared_inferred(self) -> None:
+        """Adding a family to the production gate must not be silent.
+
+        This is the check @Taknok was after in #394: new HTS-sourced families
+        should not slip in without the test suite noticing. Parametrising the
+        *decoder* over the set cannot do that — past the membership gate,
+        `parse_device_temperature_c` is identical for every family, so those
+        assertions hold by construction whatever the set contains. Requiring
+        each family to be declared as either observed or inferred does fail,
+        and forces whoever adds one to say which it is.
+        """
+        accounted = set(_CONFIRMED_HTS_TEMPERATURE_SAMPLES) | _INFERRED_HTS_TEMPERATURE_FAMILIES
+        assert accounted == set(HTS_TEMPERATURE_DEVICE_TYPES), (
+            "a family was added to or removed from HTS_TEMPERATURE_DEVICE_TYPES without "
+            "recording a captured sample or declaring it inferred"
+        )
+
+    def test_subzero_decodes_as_signed_int8(self) -> None:
+        # Outdoor detector below freezing: 0xFB = -5 °C, not 251. The decode is
+        # family-agnostic, so one family exercises it for all of them.
+        assert (
+            parse_device_temperature_c(
+                "motion_protect_curtain_outdoor_plus", {DEVICE_KEY_TEMPERATURE_C: b"\xfb"}
+            )
+            == -5.0
+        )
 
     def test_non_gated_type_returns_none(self) -> None:
         # Mini gets temperature over gRPC, so it's intentionally not read here;
@@ -730,14 +789,17 @@ class TestParseDeviceTemperatureC:
             is None
         )
 
-    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
-    def test_missing_subkey_returns_none(self, device_type: str) -> None:
-        assert parse_device_temperature_c(device_type, {}) is None
+    def test_missing_subkey_returns_none(self) -> None:
+        assert parse_device_temperature_c("motion_protect_curtain_outdoor_plus", {}) is None
 
-    @pytest.mark.parametrize("device_type", sorted(HTS_TEMPERATURE_DEVICE_TYPES))
-    def test_out_of_range_value_rejected(self, device_type: str) -> None:
+    def test_out_of_range_value_rejected(self) -> None:
         # 0x7f = 127 °C is outside the plausible window → declined, not surfaced.
-        assert parse_device_temperature_c(device_type, {DEVICE_KEY_TEMPERATURE_C: b"\x7f"}) is None
+        assert (
+            parse_device_temperature_c(
+                "motion_protect_curtain_outdoor_plus", {DEVICE_KEY_TEMPERATURE_C: b"\x7f"}
+            )
+            is None
+        )
 
     def test_gated_device_types_present(self) -> None:
         for device_type in (
