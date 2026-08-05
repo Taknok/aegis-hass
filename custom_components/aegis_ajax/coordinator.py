@@ -34,7 +34,7 @@ from custom_components.aegis_ajax.api.models import (
     is_device_deactivated,
 )
 from custom_components.aegis_ajax.api.security import SecurityApi
-from custom_components.aegis_ajax.api.session import AuthenticationError
+from custom_components.aegis_ajax.api.session import AuthenticationError, TwoFactorRequiredError
 from custom_components.aegis_ajax.api.spaces import SpacesApi
 from custom_components.aegis_ajax.const import (
     BUTTON_PRESS_DEVICE_TYPES,
@@ -627,6 +627,13 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         try:
             await self._login_and_persist()
+        except TwoFactorRequiredError as err:
+            self.update_interval = timedelta(minutes=30)
+            _LOGGER.error(
+                "Ajax requires a 2FA code to log in again — triggering reauth so the "
+                "code can be entered."
+            )
+            raise ConfigEntryAuthFailed("Two-factor authentication required") from err
         except AuthenticationError as err:
             self.update_interval = timedelta(minutes=30)
             _LOGGER.error("Authentication failed: %s — triggering reauth.", err)
@@ -665,6 +672,16 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._client.session.clear_session()
             try:
                 await self._login_and_persist()
+            except TwoFactorRequiredError as tfa_err:
+                # Ajax wants a 2FA code, which only the config flow can
+                # collect. Without this branch the error falls through to
+                # the generic `UpdateFailed` handler and HA just keeps
+                # retrying setup — and every retry asks Ajax for a *new*
+                # 2FA code, invalidating the one the user is currently
+                # typing into the reconfigure form. `ConfigEntryAuthFailed`
+                # stops the polling and opens the reauth flow, which does
+                # know how to ask for the code.
+                raise ConfigEntryAuthFailed("Two-factor authentication required") from tfa_err
             except AuthenticationError as auth_err:
                 raise ConfigEntryAuthFailed(str(auth_err)) from auth_err
             all_spaces = await self._spaces_api.list_spaces()
