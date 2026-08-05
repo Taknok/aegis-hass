@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -432,6 +433,141 @@ class TestHandleUpdate:
         assert client.hub_states["12345678"].externally_powered is True
         client._on_state_update.assert_not_called()
         client.request_hub_data.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_per_device_row_with_state_byte_skips_power_refresh(self) -> None:
+        """#386: a per-device row must never be re-read as the hub's power flag.
+
+        @aavdberg's hub, on battery during a grid outage, requested a full
+        snapshot (~8.6 KB) every ~27 minutes because one device's status
+        update was being counted as "the hub says mains power is back":
+
+            STATUS_UPDATE push (#123): 30B9BA58=[0x03=03,0xc3=00]
+            requesting fresh HTS snapshot after untrusted power delta
+
+        Both lines come from the same frame. `is_per_device_shape` only
+        recognises a device id at `params[1]`, so a frame that carries the
+        4-byte marker one slot later falls through to `_extract_direct_kv`,
+        which pairs positionally and reads the device's `0x03` operational
+        state byte as `KEY_HUB_POWERED`. That disagrees with the stored
+        `False` and schedules a refresh — on every such push, while the hub
+        is running on battery and the link is degraded.
+
+        The prefix param below is inferred from that log rather than
+        captured: what matters, and what the fix keys on, is that the frame
+        carries a populated per-device row at all. The #323 invariant still
+        holds — the flag is popped and never written from this path.
+        """
+        client = _make_client()
+        client._hubs = [MagicMock(hub_id="12345678")]
+        client._hub_states["12345678"] = HubNetworkState(externally_powered=False)
+        client._on_state_update = MagicMock()
+        client.request_hub_data = AsyncMock()
+        captured: list[tuple[str, str, dict[int, bytes]]] = []
+        client._on_device_kv = lambda hub_id, did, kv, *, from_body=False: captured.append(
+            (hub_id, did, kv)
+        )
+
+        msg = HtsMessage(
+            sender=0x12345678,
+            receiver=client._sender_id,
+            seq_num=1,
+            link=10,
+            flags=0,
+            msg_type=MsgType.UPDATES,
+            payload=tlv_encode(
+                [
+                    b"\x0b",  # sub_key 11 = STATUS_UPDATE
+                    b"\x01",  # prefix param — pushes the marker off params[1]
+                    bytes.fromhex("30B9BA58"),
+                    b"\x03",  # device operational state key ...
+                    b"\x03",  # ... whose key byte collides with KEY_HUB_POWERED
+                    b"\xc3",
+                    b"\x00",
+                ]
+            ),
+        )
+
+        await client._handle_update(msg)
+        await asyncio.sleep(0)
+
+        # No snapshot storm: the device row is not evidence about mains power.
+        client.request_hub_data.assert_not_called()
+        # #323 invariant: power is never written from a positional delta.
+        assert client.hub_states["12345678"].externally_powered is False
+        client._on_state_update.assert_not_called()
+        # ... and the per-device reading (#123) still reaches the coordinator.
+        assert captured == [("12345678", "30B9BA58", {0x03: b"\x03", 0xC3: b"\x00"})]
+
+    @pytest.mark.asyncio
+    async def test_flat_power_delta_still_schedules_refresh(self) -> None:
+        """#386 must not blunt #323's genuine power-change signal.
+
+        The real power-loss delta is flat — `[sub_key, 0x03, value]`, no
+        device marker anywhere — and it is the only prompt some firmware
+        gives before the periodic poll. Narrowing the refresh to frames
+        without a per-device row must leave this one firing.
+        """
+        client = _make_client()
+        client._hubs = [MagicMock(hub_id="12345678")]
+        client._hub_states["12345678"] = HubNetworkState(externally_powered=True)
+        client._on_state_update = MagicMock()
+        client.request_hub_data = AsyncMock()
+        msg = HtsMessage(
+            sender=0x12345678,
+            receiver=client._sender_id,
+            seq_num=1,
+            link=10,
+            flags=0,
+            msg_type=MsgType.UPDATES,
+            payload=tlv_encode([b"\x0b", b"\x03", b"\x00"]),
+        )
+
+        await client._handle_update(msg)
+        await asyncio.sleep(0)
+
+        client.request_hub_data.assert_awaited_once_with("12345678")
+
+    @pytest.mark.asyncio
+    async def test_body_logs_which_hub_sub_keys_arrived(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """#388: name the hub row's sub-keys so a claim about them is falsifiable.
+
+        The body log said only "parsed 55 keys" — a count cannot tell us
+        whether a given key is among them, which is exactly the question
+        when deciding where a value like the installed firmware version
+        lives. Keys only, never values: this row carries the Wi-Fi SSID and
+        other text, and these logs get pasted into public issues.
+        """
+        client = _make_client()
+        client._hubs = [MagicMock(hub_id="12345678")]
+        msg = HtsMessage(
+            sender=0x12345678,
+            receiver=client._sender_id,
+            seq_num=1,
+            link=10,
+            flags=0,
+            msg_type=MsgType.UPDATES,
+            payload=tlv_encode(
+                [
+                    b"\x09",  # sub_key 9 = STATUS_BODY
+                    bytes.fromhex("12345678"),
+                    b"\x37",  # firmware version ...
+                    b"2.41.116",
+                    b"\x27",  # ... and the SSID, which must not be logged
+                    b"MySecretNet",
+                ]
+            ),
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            await client._handle_update(msg)
+
+        assert "0x27" in caplog.text
+        assert "0x37" in caplog.text
+        assert "MySecretNet" not in caplog.text
+        assert "2.41.116" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_malformed_payload_drops_message_without_raising(self) -> None:

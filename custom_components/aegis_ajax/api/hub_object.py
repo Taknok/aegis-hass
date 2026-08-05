@@ -100,7 +100,16 @@ class HubObjectApi:
         self._client = client
 
     async def get_sim_info(self, hub_id: str) -> SimCardInfo | None:
-        """Get SIM card info from streamHubObject."""
+        """Get SIM card info from streamHubObject.
+
+        Returns `None` when the snapshot carries no SIM section — a hub
+        with no modem, or one the account cannot read it from. **Errors
+        propagate**: the caller owns them, because "the call failed" and
+        "the hub reported no SIM" need opposite responses and collapsing
+        both into `None` made the IMEI sensor's absence undiagnosable
+        (#379). The only symptom used to be a DEBUG line that named
+        neither the cause nor the status code.
+        """
         channel = self._client._get_channel()
         metadata = self._client._session.get_call_metadata()
 
@@ -115,16 +124,13 @@ class HubObjectApi:
             response_deserializer=lambda x: x,
         )
 
-        try:
-            stream = method(request_bytes, metadata=metadata, timeout=15)
-            async for raw_msg in stream:
-                # Parse the first message (snapshot)
-                sim_info = self._parse_sim_from_hub_object(raw_msg)
-                if sim_info:
-                    return sim_info
-                break  # Only need the first message
-        except Exception:
-            _LOGGER.debug("Failed to get hub object data for %s", hub_id)
+        stream = method(request_bytes, metadata=metadata, timeout=15)
+        async for raw_msg in stream:
+            # Parse the first message (snapshot)
+            sim_info = self._parse_sim_from_hub_object(raw_msg)
+            if sim_info:
+                return sim_info
+            break  # Only need the first message
 
         return None
 

@@ -4252,3 +4252,103 @@ class TestSirenSettingsFetchFailureLogging:
         warnings = [r for r in siren_records if r.levelno >= logging.WARNING]
         assert len(warnings) == 1, f"expected exactly one warning, got {len(warnings)}"
         assert len(siren_records) == 3, "every attempt should still be logged somewhere"
+
+
+class TestSimInfoFailureIsDiagnosable:
+    """#379 — a SIM read that fails must say so at the default log level.
+
+    The IMEI sensor is only created for hubs present in `sim_info`, so a
+    failed read means the entity is never offered. Home Assistant does not
+    evict entities a platform stops offering, so one created on an earlier
+    start sits at `unavailable` indefinitely — with nothing in the log to
+    explain it, because the read used to swallow every exception into a
+    DEBUG line that named neither the cause nor the gRPC status code.
+    """
+
+    @staticmethod
+    def _coordinator_with_sim(sim_result: object) -> AjaxCobrandedCoordinator:  # noqa: F821
+        coordinator = _make_coordinator()
+        coordinator._hub_object_api = MagicMock()
+        if isinstance(sim_result, Exception):
+            coordinator._hub_object_api.get_sim_info = AsyncMock(side_effect=sim_result)
+        else:
+            coordinator._hub_object_api.get_sim_info = AsyncMock(return_value=sim_result)
+        return coordinator
+
+    @pytest.mark.asyncio
+    async def test_first_failure_warns_and_names_the_cause(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        coordinator = self._coordinator_with_sim(RuntimeError("boom"))
+
+        with caplog.at_level(logging.WARNING):
+            await coordinator._fetch_sim_info("hub-1")
+
+        assert "Failed to read SIM info for hub hub-1" in caplog.text
+        assert "RuntimeError" in caplog.text
+        # The consequence has to be on the line too: a reporter reading this
+        # needs to connect it to the entity they can see is unavailable.
+        assert "IMEI" in caplog.text
+        assert "hub-1" not in coordinator.sim_info
+
+    @pytest.mark.asyncio
+    async def test_repeat_failure_drops_to_debug(self, caplog: pytest.LogCaptureFixture) -> None:
+        coordinator = self._coordinator_with_sim(RuntimeError("boom"))
+        await coordinator._fetch_sim_info("hub-1")
+        caplog.clear()  # drop the first failure's warning
+
+        with caplog.at_level(logging.WARNING):
+            await coordinator._fetch_sim_info("hub-1")
+
+        assert "Failed to read SIM info" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_hub_without_a_modem_is_not_an_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """`None` means "no SIM section", which is normal on a wired hub."""
+        coordinator = self._coordinator_with_sim(None)
+
+        with caplog.at_level(logging.WARNING):
+            await coordinator._fetch_sim_info("hub-1")
+
+        assert caplog.text == ""
+        assert "hub-1" not in coordinator.sim_info
+
+    @pytest.mark.asyncio
+    async def test_success_stores_info_and_rearms_the_warning(self) -> None:
+        from custom_components.aegis_ajax.api.hub_object import SimCardInfo
+
+        coordinator = self._coordinator_with_sim(RuntimeError("boom"))
+        await coordinator._fetch_sim_info("hub-1")
+        assert "hub-1" in coordinator._sim_info_failed
+
+        coordinator._hub_object_api.get_sim_info = AsyncMock(
+            return_value=SimCardInfo(active_sim=1, status=2, imei="123456789012345")
+        )
+        await coordinator._fetch_sim_info("hub-1")
+
+        assert coordinator.sim_info["hub-1"].imei == "123456789012345"
+        # A hub that recovers must be able to warn again if it breaks later.
+        assert "hub-1" not in coordinator._sim_info_failed
+
+    @pytest.mark.asyncio
+    async def test_a_failing_hub_does_not_break_the_refresh_cycle(self) -> None:
+        """The read now raises; the cycle must still complete (#379)."""
+        coordinator = _make_coordinator()
+        coordinator._client.session.is_authenticated = True
+        coordinator._streams_started = True
+        coordinator._sim_info_last_fetch = -10_000.0
+        coordinator._spaces_api = MagicMock()
+        coordinator._spaces_api.list_spaces = AsyncMock(return_value=[_make_space("s1")])
+        coordinator._spaces_api.get_space_snapshot = AsyncMock(return_value=SpaceSnapshot())
+        coordinator._devices_api = MagicMock()
+        coordinator._devices_api.get_devices_snapshot = AsyncMock(return_value=[])
+        coordinator._hub_object_api = MagicMock()
+        coordinator._hub_object_api.get_sim_info = AsyncMock(side_effect=RuntimeError("boom"))
+        coordinator._hub_object_api.get_firmware_info = AsyncMock(return_value=None)
+        coordinator._hub_object_api.get_device_firmware_updates = AsyncMock(return_value=[])
+
+        await coordinator._async_update_data()
+
+        assert "hub-1" in coordinator._sim_info_failed

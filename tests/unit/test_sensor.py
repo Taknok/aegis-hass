@@ -348,6 +348,70 @@ class TestAjaxSimImeiSensor:
         assert sensor.available is False
 
 
+class TestAjaxSimImeiSensorConstruction:
+    def test_sensor_can_be_constructed_when_hub_device_exists_but_sim_info_is_empty(self) -> None:
+        coordinator = MagicMock()
+        coordinator.devices = {"hub-1": _make_hub_device("hub-1")}
+        coordinator.sim_info = {}
+        sensor = AjaxSimImeiSensor(coordinator=coordinator, hub_id="hub-1")
+        assert sensor.unique_id == "aegis_ajax_hub-1_sim_imei"
+        assert sensor.available is False
+
+    @staticmethod
+    async def _setup(sim_info: dict) -> list:
+        """Run the real platform setup with a hub present and a given sim_info."""
+        from custom_components.aegis_ajax.sensor import async_setup_entry
+
+        coordinator = MagicMock()
+        coordinator.devices = {"hub-1": _make_hub_device("hub-1")}
+        coordinator.rooms = {}
+        coordinator.spaces = {
+            "space-1": Space(
+                id="space-1",
+                hub_id="hub-1",
+                name="Home",
+                security_state=SecurityState.DISARMED,
+                connection_status=ConnectionStatus.ONLINE,
+                malfunctions_count=0,
+            )
+        }
+        coordinator.sim_info = sim_info
+
+        entry = MagicMock()
+        entry.runtime_data = coordinator
+        added: list = []
+        with patch("custom_components.aegis_ajax.sensor._remove_orphan_outlet_power_derived"):
+            await async_setup_entry(MagicMock(), entry, added.extend)
+        return added
+
+    @pytest.mark.asyncio
+    async def test_imei_entity_is_created_even_when_the_sim_read_has_not_succeeded(self) -> None:
+        """#379: creation must not depend on the SIM read having worked.
+
+        This is the assertion that actually guards the fix. Gating creation on
+        `sim_info` meant a failed or slow read produced no entity at all, and
+        Home Assistant never removes an entity an integration stops offering —
+        so one created on an earlier start sat `unavailable` forever with
+        nothing to explain it.
+
+        Note the sibling test above passes with or without the fix, because it
+        constructs the sensor directly and never exercises the setup path where
+        the condition lives.
+        """
+        added = await self._setup(sim_info={})
+
+        assert any(isinstance(e, AjaxSimImeiSensor) for e in added)
+
+    @pytest.mark.asyncio
+    async def test_imei_entity_is_still_created_when_the_sim_read_did_succeed(self) -> None:
+        # Negative control: the previously-working path must keep working.
+        added = await self._setup(
+            sim_info={"hub-1": SimCardInfo(active_sim=1, status=2, imei="123456789012345")}
+        )
+
+        assert any(isinstance(e, AjaxSimImeiSensor) for e in added)
+
+
 class TestHubWifiSensors:
     def _make_coordinator(self, hub_id: str = "hub-1") -> MagicMock:
         coordinator = MagicMock()

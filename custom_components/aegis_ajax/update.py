@@ -115,20 +115,36 @@ class AjaxHubFirmwareUpdate(CoordinatorEntity[AjaxCobrandedCoordinator], UpdateE
         return self.coordinator.hub_firmware_updates.get(self._hub_id)
 
     @property
+    def _hub_reported_version(self) -> str | None:
+        """The firmware version the hub says it is running, if it says (#388).
+
+        Comes from the hub's own status row on the HTS channel, not from the
+        gRPC snapshot — same channel that already supplies ethernet, cellular
+        and signal strength. Hub firmwares differ in which sub-keys they put
+        in that row, so this is `None` whenever the value hasn't arrived.
+        """
+        state = self.coordinator.hub_network.get(self._hub_id)
+        if state is None:
+            return None
+        return state.firmware_version or None
+
+    @property
     def installed_version(self) -> str | None:
-        # See `_INSTALLED_VERSION_PLACEHOLDER` for why this is always a
+        # See `_INSTALLED_VERSION_PLACEHOLDER` for why the fallback is a
         # constant rather than `None`: HA's state computation needs a
         # non-`None` installed version to differentiate "up to date"
         # from "unknown".
-        return _INSTALLED_VERSION_PLACEHOLDER
+        return self._hub_reported_version or _INSTALLED_VERSION_PLACEHOLDER
 
     @property
     def latest_version(self) -> str | None:
         info = self._info
         if info is None or not info.target_version:
             # No pending update from Ajax — mirror installed_version so
-            # HA computes `STATE_OFF` and renders "Up to date".
-            return _INSTALLED_VERSION_PLACEHOLDER
+            # HA computes `STATE_OFF` and renders "Up to date". Mirroring
+            # the property rather than the placeholder keeps the two sides
+            # equal whether or not the hub reported a real version.
+            return self.installed_version
         return info.target_version
 
     @property
@@ -146,18 +162,29 @@ class AjaxHubFirmwareUpdate(CoordinatorEntity[AjaxCobrandedCoordinator], UpdateE
         # own; this integration only mirrors what the cloud is telling
         # us, and the entity is informational (no install action).
         info = self._info
+        running = self._hub_reported_version
         if info is None:
+            if running:
+                # #388: with the hub's own version in hand the old caveat
+                # would be untrue, so state what we actually know.
+                return (
+                    f"This hub reports it is running firmware {running}. "
+                    "Ajax has not queued an update for it."
+                )
             return (
                 "Ajax has not queued a firmware update for this hub. "
                 "The actual installed firmware version is not exposed by "
                 "Ajax to the integration, so 'Up-to-date' reflects only "
                 "the absence of a queued update."
             )
-        return (
+        queued = (
             f"Ajax has queued firmware {info.target_version} for this hub. "
             "The hub will install it on its own; this entity is "
             "informational and cannot trigger or skip the update."
         )
+        if running:
+            return f"This hub reports it is running firmware {running}. {queued}"
+        return queued
 
 
 class AjaxDeviceFirmwareUpdate(CoordinatorEntity[AjaxCobrandedCoordinator], UpdateEntity):

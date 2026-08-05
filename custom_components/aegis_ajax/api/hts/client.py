@@ -819,11 +819,19 @@ class HtsClient:
                         _format_non_hub_kv_summary(non_hub),
                     )
             if kv:
+                # Name the sub-keys, not just how many (#388). A count can't
+                # answer "does this hub report key X", which is the question
+                # whenever we're deciding where a hub-level value lives —
+                # and hub firmwares genuinely differ in what they include.
+                # Keys only, never values: this row carries the Wi-Fi SSID
+                # and other text, and these logs get pasted into public
+                # issues (see `_redact_if_text` for the same concern).
                 _LOGGER.debug(
-                    "Hub %s: parsed %d keys from %s",
+                    "Hub %s: parsed %d keys from %s: %s",
                     hub_id,
                     len(kv),
                     "SETTINGS_BODY" if sub_key == 5 else "STATUS_BODY",
+                    ",".join(f"0x{k:02x}" for k in sorted(kv)),
                 )
                 existing = self._hub_states.get(hub_id)
                 new_state = parse_hub_params(kv, existing)
@@ -880,8 +888,25 @@ class HtsClient:
             # flight per hub, so the #323 delta storm still can't turn into
             # a request storm — the body then confirms the change within a
             # couple of seconds.
+            #
+            # #386: the pop above stays unconditional — #323's invariant is
+            # that this path never writes the flag — but the *refresh* must
+            # not fire for a frame that is carrying per-device rows. The
+            # `is_per_device_shape` test only recognises a device id at
+            # `params[1]`; @aavdberg's hub sends a variant whose marker sits
+            # one slot later, so a routine device status push (whose first
+            # key is `0x03`, the near-universal operational-state byte)
+            # reached here and looked like "mains power is back". Each one
+            # requested a full ~8.6 KB snapshot, every ~27 minutes, while
+            # the hub was on battery mid-outage — the worst moment for it.
+            # A genuine power delta is flat (`[sub_key, 0x03, value]`) and
+            # has no populated device row, so it still fires. The residual
+            # gap is a hub-network delta that carries both a 4-byte value
+            # (e.g. an IP) and a real power change: it loses the immediate
+            # confirmation and waits for the periodic poll, which is the
+            # documented fallback anyway.
             powered_raw = kv.pop(KEY_HUB_POWERED, None)
-            if powered_raw is not None:
+            if powered_raw is not None and not self._carries_device_rows(params):
                 existing = self._hub_states.get(hub_id)
                 prev_powered = existing.externally_powered if existing is not None else None
                 if _bool_val(powered_raw) != prev_powered:
@@ -1031,6 +1056,19 @@ class HtsClient:
                 kv[key_p[0]] = val_p
             i += 2
         return kv
+
+    @classmethod
+    def _carries_device_rows(cls, params: list[bytes]) -> bool:
+        """Return True when the frame carries at least one populated device row.
+
+        Used by `_handle_update` (#386) to tell a flat hub-network delta from
+        a frame whose bytes belong to a device. A populated row means a
+        4-byte marker followed by real key/value pairs; a stray 4-byte value
+        inside a hub-network delta (an IP address, say) yields an *empty*
+        row and so does not count, which keeps the genuine power delta on
+        the fast path.
+        """
+        return any(kv for _did, kv in cls._extract_all_devices_kv(params))
 
     @staticmethod
     def _is_network_state_delta(kv: dict[int, bytes]) -> bool:
