@@ -461,6 +461,19 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
             # this was stored, or whose flow fell back to a generated id,
             # would otherwise keep an id that does not match the new token.
             new_data["device_id"] = self._client.session.device_id
+            _LOGGER.debug(
+                "Reauth persisting session for entry %s (device_id=%s, app_label=%r, token=%s…)",
+                entry.entry_id,
+                self._client.session.device_id,
+                self._app_label,
+                str(self._client.session.session_token)[:8],
+            )
+        else:
+            _LOGGER.warning(
+                "Reauth finished without a session token for entry %s — "
+                "the entry keeps its previous (rejected) token",
+                entry.entry_id,
+            )
         return self.async_update_reload_and_abort(entry, data=new_data, reason="reauth_successful")
 
     async def _async_finish_reconfigure(self) -> ConfigFlowResult:
@@ -479,6 +492,20 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
             new_data["session_token"] = self._client.session.session_token
             new_data["user_hex_id"] = self._client.session.user_hex_id
             new_data["device_id"] = self._client.session.device_id
+            _LOGGER.debug(
+                "Reconfigure persisting session for entry %s "
+                "(device_id=%s, app_label=%r, token=%s…)",
+                entry.entry_id,
+                self._client.session.device_id,
+                self._app_label,
+                str(self._client.session.session_token)[:8],
+            )
+        else:
+            _LOGGER.warning(
+                "Reconfigure finished without a session token for entry %s — "
+                "the entry keeps its previous (rejected) token",
+                entry.entry_id,
+            )
         # Refresh the visible title and unique_id too, not just the data —
         # otherwise switching accounts leaves the old email on the entry's
         # front page until a second reconfigure (#241).

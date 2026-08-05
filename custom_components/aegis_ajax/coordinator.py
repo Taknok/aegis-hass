@@ -513,7 +513,9 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         active session in Ajax) instead of reusing the latest one.
         """
         _LOGGER.debug(
-            "Logging in to Ajax (fresh session, device_id=%s)", self._client.session.device_id
+            "Logging in to Ajax (fresh session, device_id=%s, app_label=%r)",
+            self._client.session.device_id,
+            self._client.session.app_label,
         )
         await self._client.login()
         token = self._client.session.session_token

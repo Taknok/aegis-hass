@@ -49,6 +49,43 @@ class TestAsyncSetupEntry:
         assert kwargs.get("name", "").startswith("aegis_ajax_fcm_start_")
 
     @pytest.mark.asyncio
+    async def test_setup_defaults_app_label_to_the_ajax_application_label(self) -> None:
+        # Every config-flow path falls back to APPLICATION_LABEL, but setup
+        # used to fall back to "". Ajax binds the session token to the
+        # `application-label` metadata, so an entry stored before the key
+        # existed logged in as "Ajax" in the flow and then presented the
+        # resulting token as "" — rejected with UNAUTHENTICATED forever.
+        from custom_components.aegis_ajax import async_setup_entry
+        from custom_components.aegis_ajax.const import APPLICATION_LABEL
+
+        hass = MagicMock()
+        hass.data = {}
+        hass.config_entries.async_forward_entry_setups = AsyncMock(return_value=True)
+        entry = MagicMock()
+        entry.entry_id = "entry-label"
+        entry.data = {"email": "x@y", "password_hash": "h", "spaces": ["s1"]}
+        entry.options = {}
+
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.session = MagicMock()
+        mock_coordinator = MagicMock()
+        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
+
+        with (
+            patch(
+                "custom_components.aegis_ajax.AjaxGrpcClient", return_value=mock_client
+            ) as client_cls,
+            patch(
+                "custom_components.aegis_ajax.AjaxCobrandedCoordinator",
+                return_value=mock_coordinator,
+            ),
+        ):
+            await async_setup_entry(hass, entry)
+
+        assert client_cls.call_args.kwargs["app_label"] == APPLICATION_LABEL
+
+    @pytest.mark.asyncio
     async def test_setup_entry_creates_coordinator(self) -> None:
         from custom_components.aegis_ajax import async_setup_entry
 

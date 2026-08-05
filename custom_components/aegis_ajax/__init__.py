@@ -62,6 +62,7 @@ except TypeError as exc:
     _log_proto_descriptor_collision(exc)
     raise
 from custom_components.aegis_ajax.const import (  # noqa: E402
+    APPLICATION_LABEL,
     CONF_AUTO_CREATE_LABELS,
     CONF_DISABLE_PUSH_WARNING,
     CONF_PERSISTENT_NOTIFICATION_EVENTS,
@@ -314,7 +315,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
             email=entry.data["email"],
             password_hash=entry.data["password_hash"],
             device_id=entry.data.get("device_id"),
-            app_label=entry.data.get("app_label", ""),
+            app_label=entry.data.get("app_label", APPLICATION_LABEL),
         )
     else:
         _LOGGER.warning(
@@ -325,18 +326,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
             email=entry.data["email"],
             password=entry.data.get("password", ""),
             device_id=entry.data.get("device_id"),
-            app_label=entry.data.get("app_label", ""),
+            app_label=entry.data.get("app_label", APPLICATION_LABEL),
         )
     # Restore session token from stored data to skip re-login (and 2FA) on restart
     if entry.data.get("session_token") and entry.data.get("user_hex_id"):
         _LOGGER.debug(
-            # The device id is logged because Ajax binds the session token to
-            # it: a restored token paired with a different id is rejected with
-            # UNAUTHENTICATED, and without this the mismatch is invisible.
-            "Restoring stored Ajax session for entry %s (user=%s, device_id=%s)",
+            # The device id and app label are logged because Ajax binds the
+            # session token to both: a restored token paired with a different
+            # id or label is rejected with UNAUTHENTICATED, and without this
+            # the mismatch is invisible. Only a token prefix is logged — it
+            # identifies which token is in play without exposing a usable one.
+            "Restoring stored Ajax session for entry %s "
+            "(user=%s, device_id=%s, app_label=%r, token=%s…)",
             entry.entry_id,
             entry.data["user_hex_id"],
             client.session.device_id,
+            client.session.app_label,
+            str(entry.data["session_token"])[:8],
         )
         client.session.set_session(str(entry.data["session_token"]), str(entry.data["user_hex_id"]))
     else:
@@ -372,7 +378,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
             "device_id": device_id,
         }
         hass.config_entries.async_update_entry(entry, data=new_data)
-        _LOGGER.debug("Persisted refreshed Ajax session for entry %s", entry.entry_id)
+        _LOGGER.debug(
+            "Persisted refreshed Ajax session for entry %s (device_id=%s, token=%s…)",
+            entry.entry_id,
+            device_id,
+            token[:8],
+        )
 
     coordinator = AjaxCobrandedCoordinator(
         hass=hass,
