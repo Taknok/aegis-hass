@@ -29,6 +29,7 @@ from custom_components.aegis_ajax.const import (
     DeviceState,
     SecurityState,
 )
+from custom_components.aegis_ajax.coordinator import _HTS_SPACE_CONTROL_GATING_KEYS
 
 
 def _make_space(space_id: str = "s1") -> Space:
@@ -3946,6 +3947,30 @@ _MODELED_SPACE_CONTROL_ROW_KEYS = (
 )  # fmt: skip
 
 
+# The *other* row the same device emits (#311): the 22-key STATUS_BODY row,
+# arriving every 60 s. Unlike the settings row above these are @wip3out3r's real
+# bytes, which he pasted in full — device flags and counters, nothing user-typed.
+#
+# Two things make this fixture worth having rather than an invented status row.
+# `0xC3` is on it, which is what defeated the settings probe's early-out; a
+# hand-written status row omitted `0xC3` and so the suite reported silence the
+# real hardware never had. And `0x0b` is on it reading `01` — the same sub-key
+# the HTS-only keyfob path reads its experimental `Active` flag from.
+_MODELED_SPACE_CONTROL_STATUS_ROW: dict[int, bytes] = {
+    0x02: b"\x80", 0x03: b"\x03", 0x04: b"\x80", 0x05: b"\x00\x64",
+    0x06: b"\x00\x00", 0x07: b"\x80\x00\x00\x00", 0x0B: b"\x01", 0x0C: b"\x01",
+    0x0E: b"\x80", 0x0F: b"\x00", 0x10: b"\x00", 0x17: b"\x00\x00\x00\x00",
+    0x2C: b"\x01", 0x99: b"\x19", 0x9F: b"\x00", 0xB7: b"\x00",
+    0xC2: b"\x80", 0xC3: b"\x00", 0xC6: b"\x00", 0xF5: b"\x00",
+    0xF7: b"\x00", 0xF9: b"\x80",
+}  # fmt: skip
+
+
+def _modeled_space_control_status_kv() -> dict[int, bytes]:
+    """The 60 s STATUS_BODY row for a modeled SpaceControl, as captured (#311)."""
+    return dict(_MODELED_SPACE_CONTROL_STATUS_ROW)
+
+
 def _modeled_space_control_kv() -> dict[int, bytes]:
     """A modeled SpaceControl's SETTINGS_BODY row, in @wip3out3r's shape (#311)."""
     row = {key: b"\x00" for key in _MODELED_SPACE_CONTROL_ROW_KEYS}
@@ -4063,6 +4088,140 @@ class TestModeledSpaceControlIsNotAKeyfobRow:
             coordinator._on_hts_device_kv("002B1A51", "2ACCB91C", {0x04: b"\x00", 0x06: b"\x01"})
 
         assert "HTS SpaceControl probe" not in caplog.text
+
+    def test_the_real_status_row_carries_subtype_so_it_cannot_gate_the_probe(self) -> None:
+        # Provenance for the gate. `0xC3` is on *both* rows, which is why gating
+        # on the full settings dict could never go silent — and why the row above
+        # this one, written by hand without `0xC3`, reported a silence the
+        # hardware never had.
+        status = _modeled_space_control_status_kv()
+        settings = _modeled_space_control_kv()
+        assert 0xC3 in status
+        assert 0xC3 in settings
+        assert _HTS_SPACE_CONTROL_GATING_KEYS.isdisjoint(status)
+        assert 0xC3 not in _HTS_SPACE_CONTROL_GATING_KEYS
+
+    def test_probe_is_silent_for_the_real_60s_status_row(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The regression @wip3out3r measured: a line a minute, indefinitely (#311).
+
+        His hub emitted six probe lines in four minutes, the last four exactly
+        60 s apart, five of the six carrying nothing but `subtype`. This is that
+        row verbatim, so the assertion fails against the old gate.
+        """
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control()
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv(
+                "002B1A51", "2ACCB91C", _modeled_space_control_status_kv()
+            )
+
+        assert "HTS SpaceControl probe" not in caplog.text
+
+
+class TestModeledSpaceControlFlagTransitions:
+    """#311: the activation-flag candidates on a modeled SpaceControl's status row.
+
+    @wip3out3r found `0x0b` reading `01` on a gRPC-modeled SpaceControl — the
+    same sub-key the HTS-only keyfob path reads its experimental `Active` flag
+    from. If it is the same byte, this hub class can supply the deactivated
+    sample #311 has always needed, from a row already parsed. These tests pin the
+    change-only contract, not the interpretation: whether the two are the same
+    byte is what a deactivated capture would settle, and the `0x40` precedent is
+    why a matching sub-key number is not treated as evidence on its own.
+    """
+
+    def _make_space_control(self, device_type: str = "space_control") -> Device:
+        return Device(
+            id="2ACCB91C",
+            hub_id="hub-1",
+            name="Keyfob",
+            device_type=device_type,
+            room_id=None,
+            group_id="g1",
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+
+    def _feed(self, coordinator: AjaxCobrandedCoordinator, kv: dict[int, bytes]) -> None:  # noqa: F821
+        coordinator._on_hts_device_kv("002B1A51", "2ACCB91C", kv)
+
+    def test_first_sighting_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        # The status row re-reports the same constant at every poll and after
+        # every restart, so a first sighting must not be announced as a change.
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control()
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            self._feed(coordinator, _modeled_space_control_status_kv())
+
+        assert "HTS SpaceControl flag probe" not in caplog.text
+
+    def test_an_unchanged_flag_stays_silent_across_polls(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The point of the change-only contract: an active keyfob reads 01
+        # forever, so repeated polls must add nothing.
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control()
+        coordinator.async_set_updated_data = MagicMock()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            for _ in range(5):
+                self._feed(coordinator, _modeled_space_control_status_kv())
+
+        assert "HTS SpaceControl flag probe" not in caplog.text
+
+    def test_a_flag_transition_is_logged_with_the_deactivation_state(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The one event this probe exists for: `0x0b` moving off `01`."""
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control()
+        coordinator.async_set_updated_data = MagicMock()
+        self._feed(coordinator, _modeled_space_control_status_kv())
+
+        deactivated = _modeled_space_control_status_kv()
+        deactivated[0x0B] = b"\x00"
+        coordinator.devices["2ACCB91C"] = replace(
+            self._make_space_control(),
+            statuses={"temporary_deactivation_whole": True, "deactivated": True},
+        )
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            self._feed(coordinator, deactivated)
+
+        assert "HTS SpaceControl flag probe" in caplog.text
+        assert "key=0x0B 01 -> 00" in caplog.text
+        # Without the deactivation state alongside it, a transition cannot be
+        # told apart from an unrelated flag flip — same pairing as the bypass
+        # and settings probes.
+        assert "deactivated=True" in caplog.text
+
+    def test_probe_is_silent_for_other_device_families(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # `0x0b..0x0e` carry unrelated things on other families, so this stays
+        # gated by device type rather than by shape.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = _make_device(device_id="003AE89B")
+        coordinator.async_set_updated_data = MagicMock()
+
+        row = _modeled_space_control_status_kv()
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", row)
+            moved = dict(row)
+            moved[0x0B] = b"\x00"
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", moved)
+
+        assert "HTS SpaceControl flag probe" not in caplog.text
 
 
 class TestOnHtsDeviceKvSpaceSecurity:
