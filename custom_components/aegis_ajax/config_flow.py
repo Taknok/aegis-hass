@@ -94,6 +94,10 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
         self._password_hash: str = ""
         self._app_label: str = APPLICATION_LABEL
         self._request_id: str = ""
+        # Snapshot of a freshly issued session, taken before the channel is
+        # closed. `AjaxGrpcClient.close()` clears the session, so reading the
+        # token off the client afterwards yields nothing.
+        self._session_snapshot: dict[str, Any] | None = None
 
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
         """Entry point when an Ajax hub is seen on the local network.
@@ -120,6 +124,24 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
             "name": discovery_info.hostname or f"Ajax hub ({discovery_info.ip})"
         }
         return await self.async_step_user()
+
+    def _capture_session(self) -> None:
+        """Snapshot a freshly issued session before the channel is closed.
+
+        `AjaxGrpcClient.close()` clears the session, so the reauth and
+        reconfigure paths — which close the channel before persisting — used
+        to read an already-wiped token and silently leave the entry on its
+        old, rejected one. That produced an unbreakable UNAUTHENTICATED loop:
+        every retry re-logged in, and every re-login demanded 2FA again.
+        """
+        if self._client is None or not self._client.session.session_token:
+            return
+        session = self._client.session
+        self._session_snapshot = {
+            "session_token": session.session_token,
+            "user_hex_id": session.user_hex_id,
+            "device_id": session.device_id,
+        }
 
     async def _async_close_client(self) -> None:
         """Close and drop the in-flight gRPC client after a failed login.
@@ -296,6 +318,7 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
                 await self._client.connect()
                 await asyncio.wait_for(self._client.login(), timeout=30)
+                self._capture_session()
                 await self._client.close()
                 return await self._async_finish_reconfigure()
             except TwoFactorRequiredError as e:
@@ -347,6 +370,7 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                     timeout=30,
                 )
+                self._capture_session()
                 await self._client.close()
                 return await self._async_finish_reconfigure()
             except AuthenticationError:
@@ -392,6 +416,7 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
                 await self._client.connect()
                 await asyncio.wait_for(self._client.login(), timeout=30)
+                self._capture_session()
                 await self._client.close()
                 return await self._async_finish_reauth()
             except TwoFactorRequiredError as e:
@@ -435,6 +460,7 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                     timeout=30,
                 )
+                self._capture_session()
                 await self._client.close()
                 return await self._async_finish_reauth()
             except AuthenticationError:
@@ -454,19 +480,14 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
             "password_hash": self._password_hash,
             "app_label": self._app_label,
         }
-        if self._client and self._client.session.session_token:
-            new_data["session_token"] = self._client.session.session_token
-            new_data["user_hex_id"] = self._client.session.user_hex_id
-            # Persist the id the token is bound to. Entries created before
-            # this was stored, or whose flow fell back to a generated id,
-            # would otherwise keep an id that does not match the new token.
-            new_data["device_id"] = self._client.session.device_id
+        if self._session_snapshot:
+            new_data.update(self._session_snapshot)
             _LOGGER.debug(
                 "Reauth persisting session for entry %s (device_id=%s, app_label=%r, token=%s…)",
                 entry.entry_id,
-                self._client.session.device_id,
+                self._session_snapshot["device_id"],
                 self._app_label,
-                str(self._client.session.session_token)[:8],
+                str(self._session_snapshot["session_token"])[:8],
             )
         else:
             _LOGGER.warning(
@@ -488,17 +509,18 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
             "password_hash": self._password_hash,
             "app_label": self._app_label,
         }
-        if self._client and self._client.session.session_token:
-            new_data["session_token"] = self._client.session.session_token
-            new_data["user_hex_id"] = self._client.session.user_hex_id
-            new_data["device_id"] = self._client.session.device_id
+        if self._session_snapshot:
+            # The snapshot carries the device id the token is bound to.
+            # Entries created before it was stored would otherwise keep an id
+            # that does not match the new token.
+            new_data.update(self._session_snapshot)
             _LOGGER.debug(
                 "Reconfigure persisting session for entry %s "
                 "(device_id=%s, app_label=%r, token=%s…)",
                 entry.entry_id,
-                self._client.session.device_id,
+                self._session_snapshot["device_id"],
                 self._app_label,
-                str(self._client.session.session_token)[:8],
+                str(self._session_snapshot["session_token"])[:8],
             )
         else:
             _LOGGER.warning(
