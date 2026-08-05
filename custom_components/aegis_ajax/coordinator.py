@@ -512,7 +512,9 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         the only copy and a restart re-logins (creating yet another
         active session in Ajax) instead of reusing the latest one.
         """
-        _LOGGER.debug("Logging in to Ajax (fresh session)")
+        _LOGGER.debug(
+            "Logging in to Ajax (fresh session, device_id=%s)", self._client.session.device_id
+        )
         await self._client.login()
         token = self._client.session.session_token
         user_hex_id = self._client.session.user_hex_id

@@ -632,6 +632,7 @@ class TestSessionPersistence:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock()
         mock_client.session = MagicMock()
+        mock_client.session.device_id = "dev-1"
 
         captured: dict[str, object] = {}
 
@@ -662,6 +663,9 @@ class TestSessionPersistence:
         new_data = hass.config_entries.async_update_entry.call_args.kwargs["data"]
         assert new_data["session_token"] == "tok-new"
         assert new_data["user_hex_id"] == "hex-1"
+        # Ajax binds the token to the device id, so the pair has to be stored
+        # together or the next restart presents a mismatched combination.
+        assert new_data["device_id"] == "dev-1"
 
     @pytest.mark.asyncio
     async def test_persist_callback_skips_when_unchanged(self) -> None:
@@ -679,6 +683,7 @@ class TestSessionPersistence:
             "spaces": ["s1"],
             "session_token": "tok-current",
             "user_hex_id": "hex-1",
+            "device_id": "dev-1",
         }
         entry.options = {}
 
@@ -694,7 +699,7 @@ class TestSessionPersistence:
         with (
             patch(
                 "custom_components.aegis_ajax.AjaxGrpcClient",
-                return_value=MagicMock(connect=AsyncMock(), session=MagicMock()),
+                return_value=MagicMock(connect=AsyncMock(), session=MagicMock(device_id="dev-1")),
             ),
             patch(
                 "custom_components.aegis_ajax.AjaxCobrandedCoordinator",
@@ -707,6 +712,60 @@ class TestSessionPersistence:
         # Same token as already stored — must not write
         callback("tok-current", "hex-1")
         hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_callback_writes_device_id_for_entries_created_without_one(
+        self,
+    ) -> None:
+        """Entries predating the stored device id must gain one on the next login.
+
+        Without a stored id, `async_setup_entry` generates a fresh uuid every
+        setup. The token persisted under it is then presented under a different
+        id on the next restart, Ajax rejects it, and the forced re-login demands
+        2FA — a loop the user cannot escape.
+        """
+        from custom_components.aegis_ajax import async_setup_entry
+
+        hass = MagicMock()
+        hass.data = {}
+        hass.config_entries.async_forward_entry_setups = AsyncMock(return_value=True)
+
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.data = {
+            "email": "user@example.com",
+            "password_hash": "hash",
+            "spaces": ["s1"],
+        }
+        entry.options = {}
+
+        captured: dict[str, object] = {}
+
+        def _record(*args: object, **kwargs: object) -> MagicMock:
+            captured["kwargs"] = kwargs
+            cm = MagicMock()
+            cm.async_config_entry_first_refresh = AsyncMock()
+            cm.async_start_push_notifications = AsyncMock()
+            return cm
+
+        with (
+            patch(
+                "custom_components.aegis_ajax.AjaxGrpcClient",
+                return_value=MagicMock(
+                    connect=AsyncMock(), session=MagicMock(device_id="dev-generated")
+                ),
+            ),
+            patch(
+                "custom_components.aegis_ajax.AjaxCobrandedCoordinator",
+                side_effect=_record,
+            ),
+        ):
+            await async_setup_entry(hass, entry)
+
+        captured["kwargs"]["on_session_persist"]("tok-new", "hex-1")
+
+        new_data = hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        assert new_data["device_id"] == "dev-generated"
 
 
 class TestAsyncRemoveEntry:

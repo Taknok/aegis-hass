@@ -330,9 +330,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
     # Restore session token from stored data to skip re-login (and 2FA) on restart
     if entry.data.get("session_token") and entry.data.get("user_hex_id"):
         _LOGGER.debug(
-            "Restoring stored Ajax session for entry %s (user=%s)",
+            # The device id is logged because Ajax binds the session token to
+            # it: a restored token paired with a different id is rejected with
+            # UNAUTHENTICATED, and without this the mismatch is invisible.
+            "Restoring stored Ajax session for entry %s (user=%s, device_id=%s)",
             entry.entry_id,
             entry.data["user_hex_id"],
+            client.session.device_id,
         )
         client.session.set_session(str(entry.data["session_token"]), str(entry.data["user_hex_id"]))
     else:
@@ -348,13 +352,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
         Called by the coordinator after every successful login so that a
         restart can reuse the freshest token instead of forcing another
         login (which would create yet another active session in Ajax).
+
+        The device id rides along because Ajax binds the token to it. Entries
+        created before the id was stored get one generated per setup, so
+        without persisting it here the very next restart presents the token
+        under a different id and Ajax rejects it.
         """
+        device_id = client.session.device_id
         if (
             entry.data.get("session_token") == token
             and entry.data.get("user_hex_id") == user_hex_id
+            and entry.data.get("device_id") == device_id
         ):
             return
-        new_data = {**entry.data, "session_token": token, "user_hex_id": user_hex_id}
+        new_data = {
+            **entry.data,
+            "session_token": token,
+            "user_hex_id": user_hex_id,
+            "device_id": device_id,
+        }
         hass.config_entries.async_update_entry(entry, data=new_data)
         _LOGGER.debug("Persisted refreshed Ajax session for entry %s", entry.entry_id)
 
