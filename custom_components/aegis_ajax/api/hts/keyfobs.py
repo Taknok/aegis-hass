@@ -1,10 +1,25 @@
 """Parser for Ajax SpaceControl keyfob rows in the HTS SETTINGS_BODY.
 
-Keyfobs (the physical "llaveros") are **HTS-only**: they never appear in the
-gRPC `StreamLightDevices` snapshot that populates `coordinator.devices`. Instead
-they arrive as device rows inside `SETTINGS_BODY` (HTS sub-key 5) over the same
-`on_device_kv` callback used for #123 electrical readings, and were simply
-unmapped until now.
+Keyfobs (the physical "llaveros") are HTS-only **on some hubs, not all** — and
+this file only handles that class. Where they are HTS-only they never appear in
+the gRPC `StreamLightDevices` snapshot that populates `coordinator.devices`, and
+arrive instead as device rows inside `SETTINGS_BODY` (HTS sub-key 5) over the
+same `on_device_kv` callback used for #123 electrical readings.
+
+**The other class exists and this parser never sees it (#311).** `ObjectType`
+carries both `space_control` (25) and `space_control_s` (224), so a hub can
+report its keyfob as an ordinary modeled device. @wip3out3r's install does: his
+SpaceControl is in the snapshot with a group id, gets a normal HA device and
+the bypass switch that already reports deactivation, and its 47-sub-key
+SETTINGS_BODY row — carrying every one of `SpaceControl`'s own field numbers
+(0x2e, 0x31, 0x33, 0x34, 0x35, 0xc3) — never reaches this module, because
+`_on_hts_device_kv` only takes the keyfob branch for rows *absent* from the
+snapshot. That is why such an install has a SpaceControl and no keyfob entity;
+the shape not matching `KEYFOB_SHAPE` is a consequence, not the cause. Nothing
+here should be widened to absorb that row: it is a different family's device
+row, and the modeled path already surfaces the device properly. The
+coordinator's `_log_hts_space_control_settings` probe is where that class is
+observed.
 
 Empirically (live capture, 6 keyfobs) every keyfob row carries an identical
 15-sub-key set; only the name (`0x02`) and a per-device index (`0x0a`) differ:
@@ -17,8 +32,10 @@ Empirically (live capture, 6 keyfobs) every keyfob row carries an identical
     0x16 = ffff
 
 **The "active" flag is EXPERIMENTAL/unverified.** Every observed keyfob reads
-`0x0b == 0x01`; we have no `inactive` sample (only a CRA admin can deactivate a
-keyfob server-side, and that toggle is not in the mobile app). We assume
+`0x0b == 0x01`; we have no `inactive` sample. Only a CRA admin can deactivate a
+keyfob server-side — the app's *forced deactivation* toggle is a different
+mechanism, measured on hardware: it moves `0xb6`/`0xb7` and reports
+`temporary_deactivation_whole`, leaving `0x0b` untouched (#311). We assume
 `0x0b == 0x01` means "active" and expose it as an experimental diagnostic, while
 DEBUG-logging the full row (`looks_like_keyfob_candidate`) so a user who *does*
 have a deactivated keyfob can paste their log and let us confirm the real flag.

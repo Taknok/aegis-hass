@@ -3881,6 +3881,139 @@ class TestOnHtsDeviceKvKeyfob:
         mock_send.assert_not_called()
 
 
+# The sub-key set @wip3out3r captured for the SpaceControl on his hub (#311),
+# where the keyfob is a gRPC-modeled device rather than HTS-only: 47 keys,
+# identical across two SETTINGS_BODY messages. Only the six family keys carry
+# meaningful values here — the rest are present in his capture and are kept so
+# the row's *shape* is the real one, since that shape is what the classifier
+# and the probe both key off. Values are synthetic; he reported keys, not bytes.
+_MODELED_SPACE_CONTROL_ROW_KEYS = (
+    0x08, 0x09, 0x0A, 0x11, 0x12, 0x15, 0x16, 0x20, 0x21, 0x22, 0x23, 0x24,
+    0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2E, 0x31, 0x33, 0x34, 0x35, 0x50,
+    0x70, 0x71, 0x73, 0xAC, 0xAD, 0xAE, 0xB0, 0xB5, 0xB6, 0xBB, 0xBC, 0xC0,
+    0xC1, 0xC3, 0xC5, 0xCB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0, 0xF4, 0xF8,
+)  # fmt: skip
+
+
+def _modeled_space_control_kv() -> dict[int, bytes]:
+    """A modeled SpaceControl's SETTINGS_BODY row, in @wip3out3r's shape (#311)."""
+    row = {key: b"\x00" for key in _MODELED_SPACE_CONTROL_ROW_KEYS}
+    row[0x2E] = b"\x01"  # siren_triggers
+    row[0x31] = b"\x01"  # panic_enabled
+    row[0x33] = b"\x00\x02"  # associated_group_id
+    row[0x34] = b"\x00\x07"  # associated_user_id
+    row[0x35] = b"\x01"  # false_press_filter
+    row[0xC3] = b"\x00"  # subtype (SpaceControl vs SpaceControl S)
+    return row
+
+
+class TestModeledSpaceControlIsNotAKeyfobRow:
+    """A SpaceControl the gRPC snapshot models is not on the keyfob path (#311).
+
+    Keyfobs are HTS-only on *some* hubs, not all: `ObjectType` carries both
+    `space_control` and `space_control_s`, and on a hub that reports one there
+    the device gets an ordinary HA device (with the bypass switch that already
+    shows deactivation) and its SETTINGS_BODY row never reaches the keyfob
+    classifier — which is why @wip3out3r's install has a SpaceControl and no
+    keyfob `Active` entity. Pinned so nobody "fixes" that into a duplicate
+    entity, and so the shape mismatch is not mistaken for the cause.
+    """
+
+    def _make_space_control(self, device_type: str = "space_control") -> Device:
+        return Device(
+            id="2ACCB91C",
+            hub_id="hub-1",
+            name="Keyfob",
+            device_type=device_type,
+            room_id=None,
+            group_id="g1",
+            state=DeviceState.ONLINE,
+            malfunctions=0,
+            bypassed=False,
+            statuses={},
+            battery=None,
+        )
+
+    def test_modeled_space_control_row_never_enters_the_keyfob_path(self) -> None:
+        # Asserted on the *call*, not only on the empty result: the strict shape
+        # check would keep `keyfobs` empty anyway, so a result-only assertion
+        # could not tell whether the branch had been taken.
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control()
+        coordinator.async_set_updated_data = MagicMock()
+        coordinator._handle_keyfob_kv = MagicMock()  # type: ignore[method-assign]
+
+        with patch("custom_components.aegis_ajax.coordinator.async_dispatcher_send") as mock_send:
+            coordinator._on_hts_device_kv("002B1A51", "2ACCB91C", _modeled_space_control_kv())
+
+        coordinator._handle_keyfob_kv.assert_not_called()
+        assert coordinator.keyfobs == {}
+        mock_send.assert_not_called()
+
+    def test_the_row_carries_every_space_control_family_key(self) -> None:
+        # Provenance for the classification: these six are `SpaceControl`'s own
+        # field numbers in the hub's device model, and the captured row has all
+        # of them. That is what identifies the row as a SpaceControl's rather
+        # than as an unrecognised keyfob variant.
+        row = _modeled_space_control_kv()
+        assert {0x2E, 0x31, 0x33, 0x34, 0x35, 0xC3} <= set(row)
+
+    def test_probe_logs_the_family_settings_with_the_deactivation_state(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Same rationale as the bypass probe: the bytes are only conclusive
+        # paired with what the device's deactivation state actually is.
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = replace(
+            self._make_space_control(),
+            statuses={"temporary_deactivation_whole": True, "deactivated": True},
+        )
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "2ACCB91C", _modeled_space_control_kv())
+
+        assert "HTS SpaceControl probe" in caplog.text
+        assert "associated_user_id" in caplog.text
+        assert "panic_enabled" in caplog.text
+        assert "deactivated=True" in caplog.text
+        assert "temporary_deactivation_whole" in caplog.text
+
+    def test_probe_runs_for_the_s_variant_too(self, caplog: pytest.LogCaptureFixture) -> None:
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control(device_type="space_control_s")
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "2ACCB91C", _modeled_space_control_kv())
+
+        assert "HTS SpaceControl probe" in caplog.text
+
+    def test_probe_is_silent_for_other_device_families(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The same sub-key numbers mean unrelated things on other families, so
+        # the probe stays gated by device type rather than by shape.
+        coordinator = _make_coordinator()
+        coordinator.devices["003AE89B"] = _make_device(device_id="003AE89B")
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "003AE89B", _modeled_space_control_kv())
+
+        assert "HTS SpaceControl probe" not in caplog.text
+
+    def test_probe_is_silent_when_the_row_carries_no_family_key(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # A STATUS_BODY row for the same device carries status keys, not the
+        # settings family — no log noise on every 60 s probe.
+        coordinator = _make_coordinator()
+        coordinator.devices["2ACCB91C"] = self._make_space_control()
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._on_hts_device_kv("002B1A51", "2ACCB91C", {0x04: b"\x00", 0x06: b"\x01"})
+
+        assert "HTS SpaceControl probe" not in caplog.text
+
+
 class TestOnHtsDeviceKvSpaceSecurity:
     """#284: keypad full-arm of a group reaches us only as a STATUS_UPDATE arm-flag
     flip on a hub-internal space-security object (00000001/00000002) — no type=0x08

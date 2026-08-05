@@ -187,6 +187,33 @@ _HTS_BUTTON_ACTIVITY_CANDIDATE_KEYS: tuple[int, ...] = (0x39, 0x40)
 # hub-wide and is not this device's activity.
 _HTS_BUTTON_PRESS_KEY = 0x39
 
+# SpaceControl settings keys on a *gRPC-modeled* keyfob's HTS row (#311) —
+# read-only probe, nothing is routed off them.
+#
+# Keyfobs are HTS-only on some hubs but not all: `ObjectType` carries both
+# `space_control` and `space_control_s`, and on a hub that reports one the
+# keyfob is an ordinary modeled device, so its SETTINGS_BODY row never reaches
+# the keyfob classifier in `api/hts/keyfobs.py` (see `_handle_keyfob_kv`).
+# @wip3out3r's 47-key capture is that row, and it carries every one of these
+# six — they are `SpaceControl`'s own field numbers in the hub's device model,
+# which is what identifies the row as a SpaceControl's rather than as an
+# unrecognised keyfob variant. The loose keyfob-candidate predicate cannot see
+# it either: that row has no name key at all, and the predicate requires one.
+#
+# So this class of hub contributes nothing to the still-unverified activation
+# flag (#311) unless its row is logged, which is what this does. None of the
+# six is user-typed text, so the line carries no names.
+_HTS_SPACE_CONTROL_SETTINGS_KEYS: dict[int, str] = {
+    0x2E: "siren_triggers",
+    0x31: "panic_enabled",
+    0x33: "associated_group_id",
+    0x34: "associated_user_id",
+    0x35: "false_press_filter",
+    0xC3: "subtype",
+}
+# The two `ObjectType` cases a keyfob arrives as when the snapshot models it.
+_SPACE_CONTROL_DEVICE_TYPES: frozenset[str] = frozenset({"space_control", "space_control_s"})
+
 # Bounds for treating a 4-byte HTS value as a big-endian Unix epoch. Deliberately
 # wide — the point is only to reject values that clearly aren't timestamps (`00000000`,
 # a counter, a bitfield) so the probe never dresses an unrelated key up as a date.
@@ -1325,6 +1352,10 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Bypass-configuration candidate keys (#338) — read-only, logged before
         # anything that can return early so every device family reports them.
         self._log_hts_bypass_candidates(device_id_hex, device, kv)
+        # A modeled SpaceControl's settings row (#311) — read-only, same
+        # placement rationale as the bypass probe: this hub class never reaches
+        # the keyfob path, so this is the only place its row is ever visible.
+        self._log_hts_space_control_settings(device_id_hex, device, kv)
         # Button activity-timestamp candidate keys (#348) — read-only, same
         # placement rationale as the bypass probe above: every device family
         # gets probed, and the keys are Button-specific in every capture so far.
@@ -1421,6 +1452,46 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             device_id_hex,
             device.device_type,
             {f"0x{key:02X}": value.hex() for key, value in present.items()},
+            is_device_deactivated(device),
+            device_deactivation_kinds(device),
+        )
+
+    def _log_hts_space_control_settings(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """DEBUG-log a gRPC-modeled SpaceControl's HTS settings row (#311).
+
+        Read-only by design — see `_HTS_SPACE_CONTROL_SETTINGS_KEYS`. Gated by
+        device type and not by shape, because the same sub-key numbers mean
+        unrelated things on other families.
+
+        The deactivation state goes on the same line for the reason the bypass
+        probe does it: on this class of hub the keyfob already has the bypass
+        switch, so a row taken while the panel has it deactivated and one taken
+        while it does not are the pair that would locate the activation flag —
+        the flag the `Active` sensor guesses at on HTS-only hubs. The full key
+        list (numbers only, no values) rides along so a capture shows whether
+        the row's shape moved, without putting any field's contents in a log.
+
+        Silent when the row carries none of the settings keys, so the 60 s
+        status rows for the same device add no noise.
+        """
+        if device.device_type not in _SPACE_CONTROL_DEVICE_TYPES:
+            return
+        present = {
+            name: kv[key].hex()
+            for key, name in _HTS_SPACE_CONTROL_SETTINGS_KEYS.items()
+            if key in kv
+        }
+        if not present:
+            return
+        _LOGGER.debug(
+            "HTS SpaceControl probe: device=%s type=%s settings=%s row_keys=%s "
+            "deactivated=%s kinds=%s",
+            device_id_hex,
+            device.device_type,
+            present,
+            [f"0x{key:02x}" for key in sorted(kv)],
             is_device_deactivated(device),
             device_deactivation_kinds(device),
         )
@@ -1660,8 +1731,11 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _handle_keyfob_kv(self, hub_id: str, device_id_hex: str, kv: dict[int, bytes]) -> None:
         """Classify a non-gRPC SETTINGS_BODY row as a SpaceControl keyfob.
 
-        Keyfobs are HTS-only — they never appear in the gRPC device snapshot, so
-        they reach this path (where `self.devices` has no entry). A recognised
+        Reached only for rows the gRPC snapshot does not model. Keyfobs are
+        HTS-only on some hubs but not all: a hub that reports the keyfob as an
+        `ObjectType.space_control` device gives it a normal modeled device, and
+        its row never arrives here — see `api/hts/keyfobs.py` and
+        `_log_hts_space_control_settings` (#311). A recognised
         keyfob is stored in `self.keyfobs` and announced via `SIGNAL_NEW_DEVICE`
         so the binary_sensor platform can add its device + experimental "Active"
         sensor at runtime. Rows that merely *look* like keyfobs are DEBUG-logged

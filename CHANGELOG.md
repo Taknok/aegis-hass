@@ -47,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   This is diagnostic groundwork rather than a cure: if your IMEI sensor is unavailable it will now tell you *why*, which is what we need in order to fix the underlying cause.
 
+### Documentation
+- **Two things the keyfob documentation got wrong (#311).** It said a keyfob can only be deactivated by an installer or monitoring company because "there's no toggle in the Ajax app". There is one — *forced deactivation* on a SpaceControl — but it is a **different mechanism**: measured on hardware, it is the same temporary exclusion the bypass switch already shows, and it leaves the flag the **Active** sensor reads untouched. Anyone who tried it expecting to produce the missing *inactive* example got a reading that had not moved.
+
+  And it implied every install gets keyfob sensors. Some hubs report the keyfob as an **ordinary device** instead, which gives it its own device page with the usual bypass switch and **no Active sensor at all** — so an install can have a SpaceControl and no *Keyfobs* device, by design rather than as a fault. That also scopes the "every keyfob seen so far is active" observation: it only ever covered hubs of the other kind.
+
+  The README now says both, and a debug-level probe reports that second kind of hub's keyfob settings so it can contribute to confirming the indicator, which until now it structurally could not. No entity, state or attribute changes. Both findings are @wip3out3r's, from a hub that has a SpaceControl and no keyfob entity.
+
 ## [1.15.1] - 2026-08-04
 
 Consolidates the `1.15.1-beta.1` – `1.15.1-beta.12` series. Every fix below was confirmed on the reporter's hardware or on a live Home Assistant install before this release.
