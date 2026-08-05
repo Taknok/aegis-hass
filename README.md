@@ -380,7 +380,9 @@ Use these in automation templates, e.g. `{{ trigger.event.data.device_name }}`.
 ### Keyfobs (experimental)
 SpaceControl keyfobs are grouped under a single **Keyfobs** device (one per hub), with one **Active** binary sensor per keyfob, named after it (using the keyfob name set in the Ajax app).
 
-> **The active/inactive state is experimental and not yet confirmed.** On every install seen so far each keyfob reports as **active**, and a keyfob can only be deactivated by an installer or monitoring company (there's no toggle in the Ajax app, or here), so there has been no *inactive* example to validate against — the sensor may not yet reflect a genuinely deactivated keyfob.
+> **Not every hub produces these sensors, and that is expected.** Some hubs report the keyfob as an ordinary device instead, in which case it gets its own device page — with the usual bypass switch, which already shows whether it is deactivated — and no **Active** sensor. The **Keyfobs** device only appears on hubs that report their keyfobs solely over the status channel.
+
+> **The active/inactive state is experimental and not yet confirmed.** On every install that produces the sensor each keyfob reports as **active**, and a keyfob can only be deactivated server-side by an installer or monitoring company, so there has been no *inactive* example to validate against — the sensor may not yet reflect a genuinely deactivated keyfob. The Ajax app's *forced deactivation* on a keyfob is a **different** mechanism (it is the same temporary exclusion as the bypass switch) and does not produce that example.
 >
 > **You can help finalize it:** if you have a keyfob that your installer/CRA has deactivated, a **Download diagnostics** (Settings → Devices & Services → Aegis for Ajax → ⋮ → Download diagnostics) plus a debug log (`custom_components.aegis_ajax: debug`) attached to a [GitHub issue](https://github.com/bvis/aegis-hass/issues/new) would let us confirm the indicator and get it right. See [Help Wanted](#help-wanted).
 
@@ -452,7 +454,7 @@ This integration covers the hardware I personally own and can validate against a
 Areas where the integration could grow with community input:
 
 - **Video streaming** — cameras behind an Ajax **NVR** already have a live-view path via Home Assistant's native ONVIF integration ([guide](#video-cameras-onvif--rtsp)). Still open: the radio **MotionCam Video** family that isn't bridged through an NVR, and any in-integration (proxied) streaming.
-- **A deactivated SpaceControl keyfob** — keyfobs now appear as a *Keyfobs* device with an experimental per-keyfob **Active** sensor (`1.10.0`), but the active/inactive value is unconfirmed because every keyfob seen so far is active. If yours has one deactivated by your installer/CRA, a diagnostics dump + debug log would let us finalize the indicator — see #311.
+- **A deactivated SpaceControl keyfob** — keyfobs now appear as a *Keyfobs* device with an experimental per-keyfob **Active** sensor (`1.10.0`), but the active/inactive value is unconfirmed because every keyfob seen so far is active. It has to be one your **installer or monitoring company** deactivated: the app's own *forced deactivation* is a different, temporary mechanism and doesn't produce the example. A diagnostics dump + debug log would let us finalize the indicator — see #311.
 - **Device settings beyond sirens** — siren volume and alarm duration are covered since `1.15.0` (#310); detector sensitivity, LED brightness and alert thresholds still need captures from owners of that hardware.
 - **Co-branded apps** the integration doesn't yet recognise in the `App Label` dropdown.
 - **Any new device family** that shows up in the snapshot without entities.
