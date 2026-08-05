@@ -128,6 +128,31 @@ class TestAjaxHubFirmwareUpdate:
         assert "2.41.116" in summary
         assert "not exposed" not in summary
 
+    def test_device_info_includes_hub_reported_firmware(self) -> None:
+        coordinator = self._make_coordinator(None, firmware_version="2.41.116")
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert (entity.device_info or {}).get("sw_version") == "2.41.116"
+
+    def test_device_info_picks_up_firmware_reported_after_construction(self) -> None:
+        # The hub's firmware arrives over HTS, often after the entity has been
+        # constructed. `device_info` must reflect it then, not stay frozen at
+        # the construction-time value (#388).
+        from custom_components.aegis_ajax.api.hts.hub_state import HubNetworkState
+
+        coordinator = self._make_coordinator(None)
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert "sw_version" not in (entity.device_info or {})
+
+        coordinator.hub_network = {"002B1A51": HubNetworkState(firmware_version="2.41.116")}
+
+        assert (entity.device_info or {}).get("sw_version") == "2.41.116"
+
+    def test_device_info_is_none_when_hub_device_missing(self) -> None:
+        coordinator = self._make_coordinator(None)
+        coordinator.devices = {}
+        entity = AjaxHubFirmwareUpdate(coordinator, "002B1A51")
+        assert entity.device_info is None
+
     def test_latest_version_reflects_pending_update(self) -> None:
         info = HubFirmwareUpdateInfo(target_version="2.17.0", state=HUB_FW_STATE_NOT_STARTED)
         coordinator = self._make_coordinator(info)

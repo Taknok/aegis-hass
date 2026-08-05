@@ -582,6 +582,7 @@ class TestHubMonitoringCompanySensor:
             "pending_approval_companies": ["Central Two"],
             "pending_removal_companies": ["Central Three"],
         }
+
     def test_state_payload_is_json_serializable(self) -> None:
         coordinator = self._make_coordinator(
             (
@@ -613,14 +614,6 @@ class TestHubMonitoringCompanySensor:
         sensor = AjaxHubMonitoringCompanySensor(coordinator, "space-1", "hub-1")
 
         assert sensor.available is False
-
-
-def test_hub_device_info_includes_sw_version_when_reported() -> None:
-    from custom_components.aegis_ajax.entity import build_device_info
-
-    device = _make_hub_device("hub-1")
-    info = build_device_info(device, firmware_version="2.41.116")
-    assert info["sw_version"] == "2.41.116"
 
 
 # ---------------------------------------------------------------------------

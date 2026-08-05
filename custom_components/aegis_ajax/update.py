@@ -43,6 +43,7 @@ from custom_components.aegis_ajax.entity import build_device_info
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceInfo
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,13 +107,21 @@ class AjaxHubFirmwareUpdate(CoordinatorEntity[AjaxCobrandedCoordinator], UpdateE
         super().__init__(coordinator)
         self._hub_id = hub_id
         self._attr_unique_id = f"aegis_ajax_{hub_id}_firmware"
-        hub_device = coordinator.devices.get(hub_id)
-        if hub_device:
-            self._attr_device_info = build_device_info(
-                hub_device,
-                coordinator.rooms,
-                self._hub_reported_version,
-            )
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        # Recomputed per access rather than frozen in `__init__`: the hub
+        # reports its firmware over HTS, which routinely arrives after the
+        # entity is constructed. Pinning it at construction time would leave
+        # `sw_version` permanently unset on those hubs (#388).
+        hub_device = self.coordinator.devices.get(self._hub_id)
+        if hub_device is None:
+            return None
+        return build_device_info(
+            hub_device,
+            self.coordinator.rooms,
+            firmware_version=self._hub_reported_version,
+        )
 
     @property
     def _info(self) -> HubFirmwareUpdateInfo | None:

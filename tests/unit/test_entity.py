@@ -69,6 +69,24 @@ class TestBuildDeviceInfo:
         info = build_device_info(_make_device(device_type="motion_protect_outdoor"))
         assert info["model"] == "Motion Protect Outdoor"
 
+    def test_sw_version_set_from_firmware_version(self) -> None:
+        info = build_device_info(
+            _make_device(device_type="hub_two_4g", device_id="HUB7"),
+            firmware_version="2.41.116",
+        )
+        assert info["sw_version"] == "2.41.116"
+
+    def test_no_sw_version_when_firmware_version_omitted(self) -> None:
+        info = build_device_info(_make_device(device_type="hub_two_4g", device_id="HUB7"))
+        assert "sw_version" not in info
+
+    def test_no_sw_version_when_firmware_version_empty(self) -> None:
+        info = build_device_info(
+            _make_device(device_type="hub_two_4g", device_id="HUB7"),
+            firmware_version="",
+        )
+        assert "sw_version" not in info
+
 
 class TestAsyncSendDeviceCommand:
     """Maps Ajax command failures to clear, translated HomeAssistantErrors."""
