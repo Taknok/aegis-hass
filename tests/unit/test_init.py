@@ -50,11 +50,18 @@ class TestAsyncSetupEntry:
 
     @pytest.mark.asyncio
     async def test_setup_defaults_app_label_to_the_ajax_application_label(self) -> None:
-        # Every config-flow path falls back to APPLICATION_LABEL, but setup
-        # used to fall back to "". Ajax binds the session token to the
-        # `application-label` metadata, so an entry stored before the key
-        # existed logged in as "Ajax" in the flow and then presented the
-        # resulting token as "" — rejected with UNAUTHENTICATED forever.
+        # Every config-flow path falls back to APPLICATION_LABEL, but setup and
+        # the FCM/logout paths used to fall back to "". Matching the flow is
+        # right on its own merits, and `""` is the one label value known to
+        # fail: it is rejected at *login* with `bad_request` in
+        # `LoginByPasswordResponse.failure`.
+        #
+        # Deliberately not claimed: that Ajax binds the token to the label. A
+        # probe against the real backend while scoping #99 found the label is
+        # opaque and unvalidated — a nonsense label logs in and its token works
+        # against `list_spaces` — and the UNAUTHENTICATED loop this was first
+        # blamed for turned out to be `close()` clearing the session before the
+        # flow persisted it. So the fix stands, the mechanism does not.
         from custom_components.aegis_ajax import async_setup_entry
         from custom_components.aegis_ajax.const import APPLICATION_LABEL
 

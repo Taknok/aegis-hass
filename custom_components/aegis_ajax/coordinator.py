@@ -34,7 +34,11 @@ from custom_components.aegis_ajax.api.models import (
     is_device_deactivated,
 )
 from custom_components.aegis_ajax.api.security import SecurityApi
-from custom_components.aegis_ajax.api.session import AuthenticationError, TwoFactorRequiredError
+from custom_components.aegis_ajax.api.session import (
+    AuthenticationError,
+    TwoFactorRequiredError,
+    log_fingerprint,
+)
 from custom_components.aegis_ajax.api.spaces import SpacesApi
 from custom_components.aegis_ajax.const import (
     BUTTON_PRESS_DEVICE_TYPES,
@@ -514,7 +518,7 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         _LOGGER.debug(
             "Logging in to Ajax (fresh session, device_id=%s, app_label=%r)",
-            self._client.session.device_id,
+            log_fingerprint(self._client.session.device_id),
             self._client.session.app_label,
         )
         await self._client.login()

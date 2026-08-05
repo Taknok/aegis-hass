@@ -16,6 +16,36 @@ from custom_components.aegis_ajax.const import (
 )
 
 
+def log_fingerprint(value: object) -> str:
+    """Stable one-way fingerprint of a session identifier, safe to put in a log.
+
+    `session_token` and `device_id` are both in `diagnostics.TO_REDACT`, so
+    neither belongs in a log line either — and debug logs travel *further* than
+    a diagnostics dump does, because people paste them into public issues while
+    a dump is a file someone downloads. Stripping a value from one and printing
+    it in the other would be disagreeing with ourselves.
+
+    What a log actually needs from these is only "is this the same one as
+    before?" — which a digest answers without carrying the value. Truncated
+    because a log needs to be readable and 48 bits is far more than enough to
+    tell two ids apart by eye.
+
+    Same contract as `_fcm_creds_hash`: a change-detection fingerprint compared
+    only against itself, never used to authenticate anything, so a fast hash is
+    correct and a KDF would be pointless. `usedforsecurity=False` documents that
+    intent and keeps it FIPS-safe.
+
+    Accepts `object` and coerces, deliberately. Every call sits inside a
+    `_LOGGER.debug(...)` argument list, which Python evaluates eagerly — so a
+    `TypeError` in here would not spoil a log line, it would take down the login
+    path that was being logged. A diagnostic must not be able to break the thing
+    it observes, and no caller should have to defend a log statement.
+    """
+    if not value:
+        return "none"
+    return hashlib.sha256(str(value).encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+
+
 class AuthenticationError(Exception):
     """Raised when authentication fails."""
 

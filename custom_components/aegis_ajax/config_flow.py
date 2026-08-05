@@ -31,6 +31,7 @@ from custom_components.aegis_ajax.api.session import (
     AjaxSession,
     AuthenticationError,
     TwoFactorRequiredError,
+    log_fingerprint,
 )
 from custom_components.aegis_ajax.api.spaces import SpacesApi
 from custom_components.aegis_ajax.const import (
@@ -483,11 +484,11 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._session_snapshot:
             new_data.update(self._session_snapshot)
             _LOGGER.debug(
-                "Reauth persisting session for entry %s (device_id=%s, app_label=%r, token=%s…)",
+                "Reauth persisting session for entry %s (device_id=%s, app_label=%r, token=%s)",
                 entry.entry_id,
-                self._session_snapshot["device_id"],
+                log_fingerprint(self._session_snapshot["device_id"]),
                 self._app_label,
-                str(self._session_snapshot["session_token"])[:8],
+                log_fingerprint(self._session_snapshot["session_token"]),
             )
         else:
             _LOGGER.warning(
@@ -516,11 +517,11 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
             new_data.update(self._session_snapshot)
             _LOGGER.debug(
                 "Reconfigure persisting session for entry %s "
-                "(device_id=%s, app_label=%r, token=%s…)",
+                "(device_id=%s, app_label=%r, token=%s)",
                 entry.entry_id,
-                self._session_snapshot["device_id"],
+                log_fingerprint(self._session_snapshot["device_id"]),
                 self._app_label,
-                str(self._session_snapshot["session_token"])[:8],
+                log_fingerprint(self._session_snapshot["session_token"]),
             )
         else:
             _LOGGER.warning(
