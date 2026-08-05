@@ -211,6 +211,31 @@ _HTS_SPACE_CONTROL_SETTINGS_KEYS: dict[int, str] = {
     0x35: "false_press_filter",
     0xC3: "subtype",
 }
+# `0xC3` cannot gate the settings probe: it rides the 60 s STATUS_BODY row as
+# well as the settings row, so gating on the whole dict above left `present`
+# permanently non-empty and the probe logged once a minute forever — measured by
+# @wip3out3r on a modeled SpaceControl, five of six lines carrying nothing but
+# `subtype` (#311). The other five keys appear only on the settings row, so
+# requiring one of *them* is what makes the early-out do what it claims.
+# `subtype` still rides along in the output when it is present.
+_HTS_SPACE_CONTROL_GATING_KEYS: frozenset[int] = frozenset(
+    _HTS_SPACE_CONTROL_SETTINGS_KEYS.keys() - {0xC3}
+)
+# The `0x0b..0x0e` quartet that the HTS-only keyfob path reads its experimental
+# `Active` flag from (`keyfobs.KEYFOB_ACTIVE_SUBKEY` is `0x0b`). Tracked here
+# because @wip3out3r found `0x0b` present on a *modeled* SpaceControl's status
+# row reading `01` (#311). The reasoning until then was that a modeled
+# SpaceControl never reaches the keyfob path, so the flag was unavailable on this
+# class of hub; if this is the same byte, such a hub can supply the deactivated
+# sample after all, from a row we already parse.
+#
+# Whether it IS the same byte is exactly what a deactivated capture would settle,
+# and it is not assumed: the `0x40` precedent — a 4-byte epoch on one family, a
+# 1-byte counter on another — is why a sub-key number matching across families is
+# not evidence on its own. These live on the status row, which is why they are
+# logged on *change* rather than on the settings gate above; the two rows are
+# disjoint in the keys that matter.
+_HTS_SPACE_CONTROL_FLAG_CANDIDATE_KEYS: tuple[int, ...] = (0x0B, 0x0C, 0x0D, 0x0E)
 # The two `ObjectType` cases a keyfob arrives as when the snapshot models it.
 _SPACE_CONTROL_DEVICE_TYPES: frozenset[str] = frozenset({"space_control", "space_control_s"})
 
@@ -437,6 +462,14 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # key lives only in deltas, and there its first sighting IS the event
         # rather than a baseline to swallow (#348).
         self._hts_button_activity_bodies_seen: set[str] = set()
+        # Last-seen value of each SpaceControl activation-flag candidate (#311),
+        # keyed by `(device_id_hex, kv_key)`. Same change-only contract as the
+        # Button cache above and for a sharper reason: the flag is expected to
+        # read `01` on every active keyfob, so a value-per-poll log would say
+        # nothing while a *transition* is the one sample this issue has always
+        # lacked. An active keyfob therefore stays silent indefinitely and the
+        # line appears at the moment a CRA admin deactivates one.
+        self._hts_space_control_flags: dict[tuple[str, int], str] = {}
         # One-shot guard for the #206 Bug-B SmartLock id probe (DEBUG-only).
         self._smart_lock_probe_done = False
         # Per-space monotonic timestamp of when the hub first reported
@@ -1356,6 +1389,10 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # placement rationale as the bypass probe: this hub class never reaches
         # the keyfob path, so this is the only place its row is ever visible.
         self._log_hts_space_control_settings(device_id_hex, device, kv)
+        # The same device's activation-flag candidates (#311), which ride the
+        # status row rather than the settings row — disjoint from the keys above,
+        # hence a separate probe with a change-only contract.
+        self._log_hts_space_control_flag_transitions(device_id_hex, device, kv)
         # Button activity-timestamp candidate keys (#348) — read-only, same
         # placement rationale as the bypass probe above: every device family
         # gets probed, and the keys are Button-specific in every capture so far.
@@ -1473,18 +1510,23 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         list (numbers only, no values) rides along so a capture shows whether
         the row's shape moved, without putting any field's contents in a log.
 
-        Silent when the row carries none of the settings keys, so the 60 s
-        status rows for the same device add no noise.
+        Gated on `_HTS_SPACE_CONTROL_GATING_KEYS` — the settings keys *minus*
+        `0xC3`. Gating on the full set did not deliver the silence this docstring
+        used to claim: `subtype` rides the 60 s status row too, so `present` was
+        never empty and the probe logged a line a minute indefinitely, five of
+        every six carrying nothing but `subtype` (measured by @wip3out3r, #311).
+        The remaining five keys are settings-row-only, so a status row now
+        returns early while a settings row still logs every field it carries.
         """
         if device.device_type not in _SPACE_CONTROL_DEVICE_TYPES:
+            return
+        if not any(key in kv for key in _HTS_SPACE_CONTROL_GATING_KEYS):
             return
         present = {
             name: kv[key].hex()
             for key, name in _HTS_SPACE_CONTROL_SETTINGS_KEYS.items()
             if key in kv
         }
-        if not present:
-            return
         _LOGGER.debug(
             "HTS SpaceControl probe: device=%s type=%s settings=%s row_keys=%s "
             "deactivated=%s kinds=%s",
@@ -1495,6 +1537,55 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             is_device_deactivated(device),
             device_deactivation_kinds(device),
         )
+
+    def _log_hts_space_control_flag_transitions(
+        self, device_id_hex: str, device: Device, kv: dict[int, bytes]
+    ) -> None:
+        """DEBUG-log a modeled SpaceControl's activation-flag candidates on change (#311).
+
+        Read-only, and change-only by design — see
+        `_HTS_SPACE_CONTROL_FLAG_CANDIDATE_KEYS` for why these four keys are
+        worth watching on a device class that never reaches the keyfob path.
+
+        The change-only contract is what makes this cost nothing. Every keyfob
+        observed so far reads `0x0b == 0x01`, so logging the value on each 60 s
+        status row would repeat a constant forever — the same noise this probe's
+        sibling was just fixed for. A transition is the sample #311 has always
+        lacked: no `inactive` capture exists, because only a CRA admin can
+        deactivate a keyfob and we have never had a log spanning one. So an
+        active keyfob stays silent indefinitely, and the line appears at the
+        exact moment the flag moves.
+
+        A first sighting is recorded silently. The status row re-reports the same
+        constant at every poll and after every restart, so treating a first
+        sighting as an event would announce a deactivation that never happened —
+        the same trap `_maybe_fire_button_press` guards against.
+
+        Runs on the event loop (HTS listen task).
+        """
+        if device.device_type not in _SPACE_CONTROL_DEVICE_TYPES:
+            return
+        for key in _HTS_SPACE_CONTROL_FLAG_CANDIDATE_KEYS:
+            value = kv.get(key)
+            if value is None:
+                continue
+            current = value.hex()
+            cache_key = (device_id_hex, key)
+            previous = self._hts_space_control_flags.get(cache_key)
+            self._hts_space_control_flags[cache_key] = current
+            if previous is None or previous == current:
+                continue
+            _LOGGER.debug(
+                "HTS SpaceControl flag probe: device=%s type=%s key=0x%02X %s -> %s "
+                "deactivated=%s kinds=%s",
+                device_id_hex,
+                device.device_type,
+                key,
+                previous,
+                current,
+                is_device_deactivated(device),
+                device_deactivation_kinds(device),
+            )
 
     def _log_hts_button_activity_candidates(
         self, device_id_hex: str, device: Device, kv: dict[int, bytes], *, from_body: bool = False
