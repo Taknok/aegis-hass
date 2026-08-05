@@ -290,6 +290,9 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
                     email=self._email,
                     password_hash=self._password_hash,
                     app_label=self._app_label,
+                    # Same binding as reauth: the token Ajax hands back is
+                    # only valid for the device id that requested it.
+                    device_id=entry.data.get("device_id"),
                 )
                 await self._client.connect()
                 await asyncio.wait_for(self._client.login(), timeout=30)
@@ -381,6 +384,11 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
                     email=self._email,
                     password_hash=self._password_hash,
                     app_label=self._app_label,
+                    # Reuse the entry's device id. Ajax binds the session
+                    # token to the `client-device-id` it was issued for, so a
+                    # throwaway id here yields a token every subsequent call
+                    # rejects with UNAUTHENTICATED.
+                    device_id=entry.data.get("device_id"),
                 )
                 await self._client.connect()
                 await asyncio.wait_for(self._client.login(), timeout=30)
@@ -449,6 +457,10 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._client and self._client.session.session_token:
             new_data["session_token"] = self._client.session.session_token
             new_data["user_hex_id"] = self._client.session.user_hex_id
+            # Persist the id the token is bound to. Entries created before
+            # this was stored, or whose flow fell back to a generated id,
+            # would otherwise keep an id that does not match the new token.
+            new_data["device_id"] = self._client.session.device_id
         return self.async_update_reload_and_abort(entry, data=new_data, reason="reauth_successful")
 
     async def _async_finish_reconfigure(self) -> ConfigFlowResult:
@@ -466,6 +478,7 @@ class AjaxCobrandedConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._client and self._client.session.session_token:
             new_data["session_token"] = self._client.session.session_token
             new_data["user_hex_id"] = self._client.session.user_hex_id
+            new_data["device_id"] = self._client.session.device_id
         # Refresh the visible title and unique_id too, not just the data —
         # otherwise switching accounts leaves the old email on the entry's
         # front page until a second reconfigure (#241).
