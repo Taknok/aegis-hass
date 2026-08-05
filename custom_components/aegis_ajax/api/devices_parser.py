@@ -47,9 +47,9 @@ def _decode_proto_wire_shape(data: bytes) -> str:
     (or `=varint`/`=i32`/`=i64` for fixed-size cases) for each one. No
     values are surfaced — only field numbers and shapes — so this output
     is safe to paste even when the original proto carries device names
-    or other PII. Used to spot a new oneof case (e.g. `field=5`) on a
-    `LightDevice` that our compiled `.proto` doesn't yet know about (#179
-    Outlet Type E hypothesis).
+    or other PII. Used to spot a new oneof case on a `LightDevice` that
+    our compiled `.proto` doesn't know about — this is how field 5 was
+    found and then identified as the access-card count (#383).
     """
     parts: list[str] = []
     i = 0
@@ -88,6 +88,56 @@ def _decode_proto_wire_shape(data: bytes) -> str:
     return ",".join(parts) if parts else "<empty>"
 
 
+# The 5th `LightDevice` oneof case, which our compiled `.proto` predates (#383).
+# It is not a device: it is the space's **access-card count**, one summary record
+# per full device-list fetch, carrying a `count` (field 1, absent when zero) and a
+# `sorting_key` (field 2, the constant the app orders its list by). Two installs
+# corroborate it — a hub with no keypad and no cards sends no count at all, one
+# with six tags sends 6 — and it appears exactly once regardless of how many
+# devices, groups or scenarios the space has.
+_ACCESS_CARDS_COUNT_FIELD = 5
+_ACCESS_CARDS_COUNT_MEMBERS = frozenset({1, 2})  # count, sorting_key
+
+
+def _access_cards_count(data: bytes) -> int | None:
+    """Return the access-card count iff *data* is that record, else `None`.
+
+    Deliberately strict: field 5 must be the only top-level field and may
+    contain nothing but `count` and `sorting_key`. Anything else — an extra
+    sibling, an unexpected member — is a record we do not recognise after all,
+    and falls through to the unsupported-case probe rather than being quietly
+    absorbed. `count` absent means zero, as proto3 omits scalar defaults.
+    """
+    try:
+        tag, i = _decode_varint(data, 0)
+        if tag != (_ACCESS_CARDS_COUNT_FIELD << 3) | 2:
+            return None
+        length, i = _decode_varint(data, i)
+        if i + length != len(data):
+            return None  # truncated, or field 5 is not the only field
+        count = 0
+        end = i + length
+        while i < end:
+            tag, i = _decode_varint(data, i)
+            field, wire = tag >> 3, tag & 0x07
+            if field not in _ACCESS_CARDS_COUNT_MEMBERS:
+                return None
+            if wire == 0:
+                value, i = _decode_varint(data, i)
+                if field == 1:
+                    count = value
+            elif wire == 2:
+                size, i = _decode_varint(data, i)
+                i += size
+            else:
+                return None
+        if i != end:
+            return None
+    except (ValueError, IndexError):
+        return None
+    return count
+
+
 def _decode_varint(data: bytes, i: int) -> tuple[int, int]:
     """Read a protobuf varint at offset `i`, returning `(value, next_offset)`.
 
@@ -122,9 +172,9 @@ def _redact_proto_bytes_to_hex(data: bytes) -> str:
     `'A'`) still come through as hex, while real text fields (device
     names, ids, emails) are length-preserving redacted. Numeric values
     almost always contain at least one non-printable byte (`0x00` is the
-    most common), so electrical readings stay fully visible — exactly
-    what we need to map an unknown LightDevice oneof case (#179) from a
-    public bug-report log.
+    most common), so numeric values stay fully visible — which is what
+    lets an unknown LightDevice oneof case be mapped from a bug-report
+    log without the log carrying anyone's device names.
     """
     out: list[str] = []
     i = 0
@@ -576,50 +626,59 @@ def parse_device(proto_light_device: Any) -> Device | None:  # noqa: ANN401
         return _parse_hub_device(proto_light_device.hub_device)
     if device_kind == "video_edge_channel":
         return _parse_video_edge_channel(proto_light_device.video_edge_channel)
-    _LOGGER.debug("Skipping unsupported device type: %s", device_kind)
     # `device_kind is None` means the LightDevice proto's `device`
     # oneof didn't match any case we know (`hub_device`,
-    # `video_edge`, `video_edge_channel`, `smart_lock`). The bytes
-    # are preserved as protobuf unknown fields — most likely a NEW
-    # oneof case the cloud started emitting for a device family
-    # we haven't pulled into the local `.proto` yet (#179 Outlet
-    # Type E hypothesis: 18 of these landed during a load-toggle
-    # capture with zero matching HTS deltas). Surface enough
-    # structure to identify the new field number AND the redacted
-    # contents so the case can be reconstructed from a single
-    # capture without another user round-trip.
-    if device_kind is None and _LOGGER.isEnabledFor(logging.DEBUG):
+    # `video_edge`, `video_edge_channel`, `smart_lock`), and the bytes
+    # are preserved as protobuf unknown fields.
+    #
+    # One such case is identified and is NOT a device: field 5 is the
+    # space's access-card count (#383) — see `_access_cards_count`.
+    # Recognising it before the probe keeps a routine, once-per-fetch
+    # summary record out of the "unsupported" wording, which said the
+    # integration had met something it could not handle when it had
+    # not. Anything else is genuinely unknown and still gets the
+    # probe: enough structure to identify the new field number AND the
+    # redacted contents, so a new case can be reconstructed from a
+    # single capture without another user round-trip.
+    raw = b""
+    if device_kind is None:
         try:
             raw = proto_light_device.SerializeToString()
         except Exception:  # noqa: BLE001
             return None
-        if raw:
+        cards = _access_cards_count(raw)
+        if cards is not None:
             _LOGGER.debug(
-                "Unsupported LightDevice (%db) wire-shape: %s",
-                len(raw),
-                _decode_proto_wire_shape(raw),
+                "Skipping the space's access-card count record (count=%d) — "
+                "a summary, not a device (#383)",
+                cards,
             )
-            # Tiny protos (≤ TINY_PROTO_THRESHOLD bytes total) are
-            # protocol-level state messages, not user-data payloads —
-            # there's no room for a device name / room / email inside
-            # that envelope. Render them with raw hex so short ASCII
-            # codes (3-char status strings like `OFF`/`ON`, hub-id
-            # suffixes, device-type tags) come through directly.
-            # Larger protos (real device records that DO carry
-            # user-set names) keep the ≥3-byte ASCII redaction. From
-            # #179: beta.6 capture showed 18 events with the shape
-            # `f5={f2:<3 ASCII chars>}` lining up with Outlet load
-            # transitions — but redaction hid exactly the 3 chars
-            # needed to identify whether they encode state or just
-            # a device-id reference.
-            bytes_str = (
-                raw.hex() if len(raw) <= _TINY_PROTO_THRESHOLD else _redact_proto_bytes_to_hex(raw)
-            )
-            _LOGGER.debug(
-                "Unsupported LightDevice (%db) bytes: %s",
-                len(raw),
-                bytes_str,
-            )
+            return None
+    _LOGGER.debug("Skipping unsupported device type: %s", device_kind)
+    if raw and _LOGGER.isEnabledFor(logging.DEBUG):
+        _LOGGER.debug(
+            "Unsupported LightDevice (%db) wire-shape: %s",
+            len(raw),
+            _decode_proto_wire_shape(raw),
+        )
+        # Tiny protos (≤ TINY_PROTO_THRESHOLD bytes total) are
+        # protocol-level state messages, not user-data payloads —
+        # there's no room for a device name / room / email inside
+        # that envelope. Render them with raw hex so short ASCII
+        # codes (3-char status strings like `OFF`/`ON`, hub-id
+        # suffixes, device-type tags) come through directly.
+        # Larger protos (real device records that DO carry user-set
+        # names) keep the ≥3-byte ASCII redaction. That threshold is
+        # what made #383 answerable: the access-card record falls under
+        # it, so its `sorting_key` arrived readable instead of masked.
+        bytes_str = (
+            raw.hex() if len(raw) <= _TINY_PROTO_THRESHOLD else _redact_proto_bytes_to_hex(raw)
+        )
+        _LOGGER.debug(
+            "Unsupported LightDevice (%db) bytes: %s",
+            len(raw),
+            bytes_str,
+        )
     return None
 
 
