@@ -715,6 +715,8 @@ _CONFIRMED_HTS_TEMPERATURE_SAMPLES: dict[str, tuple[bytes, float]] = {
     # app shows — not the gRPC board temperature, so it matches and updates live.
     "street_siren": (b"\x19", 25.0),
     "home_siren": (b"\x17", 23.0),
+    # #375: 0x1f = 31 °C in August for street siren double deck.
+    "street_siren_double_deck": (b"\x1f", 31.0),
 }
 
 # Families in the production gate with no recorded byte-level sample. They are
