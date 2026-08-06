@@ -904,6 +904,126 @@ class TestStreamHandlers:
         coordinator._handle_devices_snapshot([updated])
         assert coordinator.devices["d1"] is updated
 
+    # --- #403: measurements must survive a snapshot that omits them -----------
+    #
+    # A snapshot rebuilds each device, so a reading the stream does not repeat was
+    # lost until that device next sent one. @wip3out3r measured 1/13 batteries and
+    # 1/11 signal strengths still empty four hours on, while the only two devices
+    # with an existing carry-forward kept their values the whole time.
+
+    def test_snapshot_carries_battery_forward_when_it_omits_one(self) -> None:
+        """Battery is the worst case: at 100% it has nothing to retransmit."""
+        from custom_components.aegis_ajax.api.models import BatteryInfo
+
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = replace(
+            _make_device("d1"), battery=BatteryInfo(level=100, is_low=False)
+        )
+
+        coordinator._handle_devices_snapshot([_make_device("d1")])
+
+        assert coordinator.devices["d1"].battery is not None
+        assert coordinator.devices["d1"].battery.level == 100
+
+    def test_snapshot_carries_signal_strength_forward(self) -> None:
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device("d1", statuses={"signal_strength": 3})
+
+        coordinator._handle_devices_snapshot([_make_device("d1")])
+
+        assert coordinator.devices["d1"].statuses["signal_strength"] == 3
+
+    def test_temperature_is_deliberately_not_in_the_carry_forward_list(self) -> None:
+        """Records that part of #403 is knowingly unfixed.
+
+        Seven of his nine temperatures emptied — the light-stream families, which
+        the `HUB_DEVICE_TEMPERATURE_DEVICE_TYPES` block does not cover. Adding
+        `temperature` here would fix those and would also break
+        `test_snapshot_does_not_invent_temperature_for_non_siren`, which pins the
+        opposite deliberately. Pinned as a decision so the next person finds the
+        conflict instead of discovering it by breaking that test.
+        """
+        from custom_components.aegis_ajax.coordinator import (
+            _SNAPSHOT_CARRY_FORWARD_STATUS_KEYS,
+        )
+
+        assert "temperature" not in _SNAPSHOT_CARRY_FORWARD_STATUS_KEYS
+
+    def test_snapshot_does_not_carry_an_operational_alert_forward(self) -> None:
+        """The reason the carry list is named rather than a blanket merge.
+
+        `lid_opened` is an alert, not a measurement: its absence from a fresh
+        snapshot is the signal that it has cleared. Carrying it would pin a
+        tamper alert on forever — the failure a "merge instead of replace" would
+        have introduced while fixing the battery.
+        """
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = _make_device(
+            "d1", statuses={"lid_opened": True, "signal_strength": 3}
+        )
+
+        coordinator._handle_devices_snapshot([_make_device("d1")])
+
+        assert "lid_opened" not in coordinator.devices["d1"].statuses
+        # The measurement alongside it still survives, so this is the allowlist
+        # discriminating rather than the carry-forward simply not running.
+        assert coordinator.devices["d1"].statuses["signal_strength"] == 3
+
+    def test_a_value_in_the_snapshot_wins_over_the_carried_one(self) -> None:
+        """Carry-forward only fills gaps, so #312's live tracking still holds.
+
+        Uses `signal_strength` rather than `temperature` on purpose: temperature
+        is not in the carry list, so this would pass without exercising anything —
+        which is how it was first written, and a mutation that let a carried value
+        override a fresh one did not fail it. Also asserts the battery, since a
+        stale battery overriding a fresh reading is the same defect on the field
+        that has its own carry.
+        """
+        from custom_components.aegis_ajax.api.models import BatteryInfo
+
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = replace(
+            _make_device("d1", statuses={"signal_strength": 1}),
+            battery=BatteryInfo(level=10, is_low=True),
+        )
+
+        coordinator._handle_devices_snapshot(
+            [
+                replace(
+                    _make_device("d1", statuses={"signal_strength": 3}),
+                    battery=BatteryInfo(level=95, is_low=False),
+                )
+            ]
+        )
+
+        assert coordinator.devices["d1"].statuses["signal_strength"] == 3
+        assert coordinator.devices["d1"].battery is not None
+        assert coordinator.devices["d1"].battery.level == 95
+
+    def test_snapshot_logs_what_it_replaced_and_carried(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The observable this path did not have at any log level (#403).
+
+        A full snapshot could replace every device and empty a fleet of readings
+        without leaving a trace, so the cause of the *invocation* could not be
+        investigated. Reported by @wip3out3r, who read the source after failing
+        to find the line I had asked him for.
+        """
+        from custom_components.aegis_ajax.api.models import BatteryInfo
+
+        coordinator = self._make_coordinator_with_stream()
+        coordinator.devices["d1"] = replace(
+            _make_device("d1", statuses={"signal_strength": 3}),
+            battery=BatteryInfo(level=100, is_low=False),
+        )
+
+        with caplog.at_level("DEBUG", logger="custom_components.aegis_ajax.coordinator"):
+            coordinator._handle_devices_snapshot([_make_device("d1")])
+
+        assert "Device snapshot applied: 1 device(s) replaced" in caplog.text
+        assert "carried forward 1 reading(s) and 1 battery value(s)" in caplog.text
+
     @staticmethod
     def _make_doorbell(device_id: str, device_type: str, name: str = "Deurbel") -> Device:
         return Device(

@@ -143,6 +143,45 @@ _TAMPER_SOURCE_KEYS: dict[str, str] = {
 # so a reporter on DEBUG can confirm the semantics on their own hardware.
 _HTS_TAMPER_CANDIDATE_KEYS: tuple[int, ...] = (0x04, 0x0F)
 
+# Per-device *measurements* carried across a full device snapshot that omits
+# them (#403). `_handle_devices_snapshot` rebuilds each device from the snapshot,
+# so a reading the stream does not repeat is gone until that device next sends
+# one — and a battery sitting at 100% has nothing to send, which is why it is the
+# reading that never comes back. @wip3out3r measured 1 of 13 batteries and 1 of
+# 11 signal strengths still empty four hours later, while the only two devices
+# that already had a carry-forward kept their values throughout. That contrast is
+# what identified this function rather than the HTS disconnect handler, which
+# preserves its caches by design.
+#
+# Named, rather than a blanket "merge instead of replace", because most of what
+# rides in `statuses` must NOT survive a snapshot: `lid_opened`, `case_drilling`
+# and `gsm_connected` are operational alerts, and an alert that has cleared has
+# to clear here too. Membership follows the rule the report states better than we
+# had: a snapshot omitting a *measurement* does not make the previous value
+# wrong, only older. Anything whose absence is itself the signal stays out.
+#
+# `temperature` is deliberately NOT here, and that leaves part of #403 unfixed.
+# Seven of his nine temperatures emptied — the light-stream families, which the
+# block below does not cover because it is gated on
+# `HUB_DEVICE_TEMPERATURE_DEVICE_TYPES`. Adding it here fixes those, and it also
+# breaks `test_snapshot_does_not_invent_temperature_for_non_siren`, which pins the
+# opposite on purpose: a family with no per-device temperature source must not end
+# up holding one. Carrying only a value the device previously reported is not
+# "inventing" it, so the two may well be reconcilable — but overturning a pinned
+# decision wants evidence, not a convenient reading, and the warm-start cache
+# (#114) is a real way a bad value could become immortal once it is sticky. Left
+# open on the issue rather than settled here.
+#
+# `tamper` and the siren settings keep their own blocks below — they carry
+# provenance conditions this generic pass has no business reproducing.
+_SNAPSHOT_CARRY_FORWARD_STATUS_KEYS: frozenset[str] = frozenset(
+    {
+        "humidity",
+        "co2",
+        "signal_strength",
+    }
+)
+
 # HTS per-device kv keys that may carry the device's bypass configuration
 # (#338) — read-only probe, nothing is routed off them.
 #
@@ -2192,7 +2231,23 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.async_set_updated_data({"spaces": self.spaces, "devices": self.devices})
 
     def _handle_devices_snapshot(self, devices: list[Device]) -> None:
-        """Handle initial snapshot or full device snapshot update from stream."""
+        """Handle initial snapshot or full device snapshot update from stream.
+
+        Emits one DEBUG line per snapshot, which is the observable this path was
+        missing entirely (#403). @wip3out3r went looking for it and found there
+        was nothing to find at any log level: `Device stream started for space`
+        fires once per coordinator lifetime so an in-task reconnect never emits
+        it, a clean server-side close falls through to the backoff with no line,
+        this function had no logger call of its own, and the base coordinator's
+        `Manually updated aegis_ajax data` fires on every update path and cannot
+        identify a snapshot. So a full snapshot could arrive, replace every
+        device and empty a fleet of readings without leaving a trace — which is
+        exactly what happened to him, three seconds after a transport close, and
+        why the cause of the *invocation* is still open. The line reports what was
+        carried forward so the next occurrence is decisive rather than inferred.
+        """
+        carried_reading_count = 0
+        carried_battery_count = 0
         for device in devices:
             # Per-device temperature (#220, #229) comes from a separate
             # per-device RPC, not this stream, so a fresh snapshot would wipe
@@ -2250,6 +2305,26 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     from dataclasses import replace as dc_replace  # noqa: PLC0415
 
                     device = dc_replace(device, statuses={**device.statuses, **carried})
+            # Measurements the snapshot left out (#403). Last of the carry-forward
+            # blocks on purpose: the specific ones above own their keys, and this
+            # only ever fills what is still missing after them.
+            if existing is not None:
+                from dataclasses import replace as dc_replace  # noqa: PLC0415
+
+                carried_readings = {
+                    key: existing.statuses[key]
+                    for key in _SNAPSHOT_CARRY_FORWARD_STATUS_KEYS
+                    if key not in device.statuses and key in existing.statuses
+                }
+                if carried_readings:
+                    carried_reading_count += len(carried_readings)
+                    device = dc_replace(device, statuses={**device.statuses, **carried_readings})
+                # Battery is a `Device` field rather than a status, so no status
+                # carry can reach it — and it is the worst-affected reading for
+                # exactly the reason it needs its own line here.
+                if device.battery is None and existing.battery is not None:
+                    carried_battery_count += 1
+                    device = dc_replace(device, battery=existing.battery)
             self.devices[device.id] = device
         # `DevicesApi` dedups video-doorbell twins per snapshot, but the merge
         # above only ever *adds* keys — a `motion_cam_video_*` ghost that was
@@ -2259,6 +2334,13 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Re-run the dedup across the whole device set now that this snapshot
         # may have brought the sibling in.
         self._dedupe_video_doorbells()
+        _LOGGER.debug(
+            "Device snapshot applied: %d device(s) replaced, carried forward "
+            "%d reading(s) and %d battery value(s)",
+            len(devices),
+            carried_reading_count,
+            carried_battery_count,
+        )
         self.async_set_updated_data({"spaces": self.spaces, "devices": self.devices})
         # Refresh the persisted cache so the next restart can warm-start
         # from real data instead of the previous boot's snapshot (#114).
