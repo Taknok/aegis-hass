@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "Hub nie rozpoznał polecenia."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant nie może ponownie aktywować tego urządzenia: hub Ajax nie udostępnia polecenia anulującego dezaktywację. Aktywuj je ponownie w aplikacji Ajax."
+        },
         "command_failed": {
             "message": "Nie udało się ukończyć polecenia. Hub zwrócił: {reason}."
         }

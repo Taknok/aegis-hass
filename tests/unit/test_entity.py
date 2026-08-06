@@ -132,6 +132,31 @@ class TestAsyncSendDeviceCommand:
         # No refresh on failure
         coordinator.async_request_refresh.assert_not_called()
 
+    async def test_bypass_clear_unsupported_maps_to_translation_key(self) -> None:
+        """A bypass clear must name its cause, not fall back to the raw reason (#338)."""
+        from unittest.mock import AsyncMock
+
+        import pytest  # noqa: PLC0415
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.aegis_ajax.api.devices import DeviceCommandError
+        from custom_components.aegis_ajax.entity import async_send_device_command
+
+        coordinator = self._coordinator()
+        coordinator.devices_api.send_command = AsyncMock(
+            side_effect=DeviceCommandError(
+                "bypass: clearing a deactivation is not supported",
+                reason="bypass_clear_unsupported",
+            )
+        )
+
+        with pytest.raises(HomeAssistantError) as exc:
+            await async_send_device_command(coordinator, object())
+
+        assert exc.value.translation_key == "command_bypass_clear_unsupported"
+        assert exc.value.translation_domain == DOMAIN
+        coordinator.async_request_refresh.assert_not_called()
+
     async def test_unknown_reason_falls_back_with_placeholder(self) -> None:
         from unittest.mock import AsyncMock
 

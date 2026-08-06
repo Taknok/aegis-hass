@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "O hub não reconheceu o comando."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "O Home Assistant não pode reativar este dispositivo: o hub Ajax não oferece nenhum comando para remover uma desativação. Reativa-o na aplicação Ajax."
+        },
         "command_failed": {
             "message": "Não foi possível concluir o comando. O hub devolveu: {reason}."
         }

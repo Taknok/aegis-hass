@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "Hub komutu tanımadı."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant bu cihazı yeniden etkinleştiremiyor: Ajax hub'ı bir devre dışı bırakmayı kaldıracak bir komut sunmuyor. Cihazı Ajax uygulamasından yeniden etkinleştirin."
+        },
         "command_failed": {
             "message": "Komut tamamlanamadı. Hub şunu döndürdü: {reason}."
         }

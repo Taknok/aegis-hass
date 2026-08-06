@@ -288,6 +288,10 @@ class AjaxBypassSwitch(CoordinatorEntity[AjaxCobrandedCoordinator], SwitchEntity
 
     Writing still goes out as the permanent ("engineering") deactivation; the
     granular mode in force is exposed as the `deactivation_kinds` attribute.
+    Turning the switch *off* cannot be honoured — the hub's bypass command has
+    no value that clears a deactivation — so it raises a translated error
+    pointing at the Ajax app rather than sending a value the server rejects
+    (#338).
     """
 
     _attr_has_entity_name = True

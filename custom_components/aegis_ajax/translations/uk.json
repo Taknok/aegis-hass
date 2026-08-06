@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "Хаб не розпізнав команду."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant не може повторно активувати цей пристрій: хаб Ajax не має команди для скасування деактивації. Активуйте його знову в застосунку Ajax."
+        },
         "command_failed": {
             "message": "Не вдалося завершити команду. Хаб повернув: {reason}."
         }
