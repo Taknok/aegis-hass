@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message PhotoPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.ImageResolution image_resolution = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.AlarmsWithPhotoVerification alarms_with_photo_verification = 2;
+  int32 photos_by_alarm = 3;
+  int32 photos_on_demand = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.HdrImage hdr_image = 5;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.Capability capabilities = 6;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.AvailablePhotoParams available_photo_params = 7;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.PhotoBacklight available_photo_backlights = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.PhotoBacklight photo_backlight = 9;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.CameraRestriction camera_restrictions = 10;
+
+  message PhotoPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.ImageResolution image_resolution = 1;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.AlarmsWithPhotoVerification alarms_with_photo_verification = 2;
+    optional int32 photos_by_alarm = 3;
+    optional int32 photos_on_demand = 4;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.HdrImage hdr_image = 5;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.PhotoBacklight photo_backlight = 6;
+  }
+
+  message AlarmsWithPhotoVerification {
+    oneof case {
+      int32 alarms_with_photo_verification = 1;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.AlarmsWithPhotoVerification.All all = 2;
+    }
+
+    message All {
+    }
+  }
+
+  message AvailablePhotoParams {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.ImageResolution image_resolution = 1;
+    int32 max_photo_by_alarm = 2;
+    int32 max_photo_on_demand = 3;
+  }
+
+  message CameraRestriction {
+    oneof restriction {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.CameraRestriction.SlowDeliveryOfHighResolutionPhotos slow_delivery_of_high_resolution_photos = 1;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.CameraRestriction.ReducedAmountOfPhotosByAlarm reduced_amount_of_photos_by_alarm = 2;
+    }
+
+    message SlowDeliveryOfHighResolutionPhotos {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoPart.ImageResolution image_resolution = 1;
+    }
+
+    message ReducedAmountOfPhotosByAlarm {
+      int32 amount = 1;
+    }
+  }
+
+  enum ImageResolution {
+    IMAGE_RESOLUTION_UNSPECIFIED = 0;
+    IMAGE_RESOLUTION_160X120 = 1;
+    IMAGE_RESOLUTION_320X240 = 2;
+    IMAGE_RESOLUTION_960X720 = 4;
+    IMAGE_RESOLUTION_640X480 = 5;
+  }
+
+  enum HdrImage {
+    HDR_IMAGE_UNSPECIFIED = 0;
+    HDR_IMAGE_OFF = 1;
+    HDR_IMAGE_ON = 2;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_PHOD = 1;
+    CAPABILITY_HDR = 2;
+    CAPABILITY_PHOD_COUNT_SETTING = 3;
+    CAPABILITY_ALARMS_WITH_PHOTO_VERIFICATION = 4;
+    CAPABILITY_PHOTO_BACKLIGHT = 5;
+  }
+
+  enum PhotoBacklight {
+    PHOTO_BACKLIGHT_UNSPECIFIED = 0;
+    PHOTO_BACKLIGHT_OPEN_SPACE = 1;
+    PHOTO_BACKLIGHT_ALONG_RIGHT_WALL = 2;
+    PHOTO_BACKLIGHT_ALONG_LEFT_WALL = 3;
+  }
+}

@@ -7,27 +7,30 @@ import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_j
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_battery.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/fast_tamper.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/fast_tamper_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/common/common_arming_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_temperature.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_fibra_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_warnings.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_siren_triggers.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/reed_contact_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_chimes.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_tamper_status.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/always_active_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_wings_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_extra_contact_sensor_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/led_indication_part.proto";
 
-option swift_prefix = "";
-option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
 option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
 
 message DoorProtect {
-  common.CommonJewellerPart common_jeweller_part = 1;
-
-  common.CommonDoorProtectPart common_door_protect_part = 2;
-
-  common.DeviceBattery device_battery = 3;
-
-  /**
-  DEPRECATED
-  */
-
-  // use common.SirenTriggers
-  repeated DeprecatedSirenTrigger deprecated_siren_triggers = 0x2E [deprecated = true];
-
-  // use common.DeviceChimes
-  repeated DeprecatedChimeTrigger deprecated_chime_triggers = 0x4E [deprecated = true];
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBattery device_battery = 3;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtect.DeprecatedSirenTrigger deprecated_siren_triggers = 46 [deprecated = true];
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtect.DeprecatedChimeTrigger deprecated_chime_triggers = 78 [deprecated = true];
 
   enum DeprecatedSirenTrigger {
     DEPRECATED_SIREN_TRIGGER_UNSPECIFIED = 0;
@@ -43,26 +46,13 @@ message DoorProtect {
 }
 
 message DoorProtectS {
-  common.CommonJewellerPart common_jeweller_part = 1;
-
-  common.CommonDoorProtectPart common_door_protect_part = 2;
-
-  common.DeviceBattery device_battery = 3;
-
-  common.FastTamperPart fast_tamper_part = 4;
-
-  /**
-  DEPRECATED
-  */
-
-  // use common.SirenTriggers
-  repeated DeprecatedSirenTrigger deprecated_siren_triggers = 0x2E [deprecated = true];
-
-  // use common.DeviceChimes
-  repeated DeprecatedChimeTrigger deprecated_chime_triggers = 0x4E [deprecated = true];
-
-  // use common.FastTamperPart
-  common.FastTamper fast_tamper = 0x73 [deprecated = true];
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBattery device_battery = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.FastTamperPart fast_tamper_part = 4;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectS.DeprecatedSirenTrigger deprecated_siren_triggers = 46 [deprecated = true];
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectS.DeprecatedChimeTrigger deprecated_chime_triggers = 78 [deprecated = true];
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.FastTamper fast_tamper = 115 [deprecated = true];
 
   enum DeprecatedSirenTrigger {
     DEPRECATED_SIREN_TRIGGER_UNSPECIFIED = 0;
@@ -75,4 +65,54 @@ message DoorProtectS {
     DEPRECATED_CHIME_TRIGGER_REED = 1;
     DEPRECATED_CHIME_TRIGGER_EXTRA_CONTACT = 2;
   }
+}
+
+message DoorProtectPlus {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 1;
+}
+
+message DoorProtectFibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 1;
+}
+
+message DoorProtectPlusFibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 1;
+}
+
+message DoorProtectSPlus {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 1;
+}
+
+message DoorProtectG3 {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 1;
+}
+
+message DoorProtectPlusG3Fibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDoorProtectPart common_door_protect_part = 1;
+}
+
+message DoorProtectFibraVds {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTemperature device_temperature = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonFibraPart common_fibra_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceWarnings device_warnings = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart reed_contact_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceChimes device_chimes = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AlwaysActivePart always_active_part = 9;
+}
+
+message DoorProtectOutdoor {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTemperature device_temperature = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceChimes device_chimes = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExtraContactSensorPart extra_contact_sensor_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart reed_contact_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AlwaysActivePart always_active_part = 10;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 11;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 12;
 }

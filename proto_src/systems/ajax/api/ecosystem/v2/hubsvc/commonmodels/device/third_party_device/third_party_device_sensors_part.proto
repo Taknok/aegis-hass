@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_event_locator.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceSensorsPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor sensors = 1;
+
+  message Sensor {
+    int32 index = 1;
+    bool enabled = 2;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator event_locator = 3;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.OperatingMode operating_mode = 4;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.State state = 5;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.Capability capabilities = 6;
+    oneof kind {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.OpeningSensor opening_sensor = 1000;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.Maintenance maintenance = 1001;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.ExternalContact1 external_contact_1 = 1002;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.ExternalContact2 external_contact_2 = 1003;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.TiltSensor tilt_sensor = 1004;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.MotionSensor motion_sensor = 1005;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.FaultMode fault_mode = 1006;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.GlassBreakSensor glass_break_sensor = 1007;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.ShockSensor shock_sensor = 1008;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.EndOfLife end_of_life = 1009;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.LeakageSensor leakage_sensor = 1010;
+    }
+
+    message OpeningSensor {
+    }
+
+    message Maintenance {
+    }
+
+    message ExternalContact1 {
+    }
+
+    message ExternalContact2 {
+    }
+
+    message TiltSensor {
+    }
+
+    message MotionSensor {
+    }
+
+    message FaultMode {
+    }
+
+    message GlassBreakSensor {
+    }
+
+    message ShockSensor {
+    }
+
+    message EndOfLife {
+    }
+
+    message LeakageSensor {
+    }
+
+    message SensorSettings {
+      int32 index = 1;
+      optional bool enabled = 2;
+      optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.ThirdPartyDeviceEventLocatorSettings event_locator = 3;
+    }
+
+    enum Capability {
+      CAPABILITY_UNSPECIFIED = 0;
+      CAPABILITY_LAST_ENABLED_ALARM_USED_IN_SCENARIOS = 1;
+      CAPABILITY_EVENT_LOCATOR_SELECTION_AVAILABLE = 2;
+      CAPABILITY_CONFIGURATION_AVAILABLE = 3;
+      CAPABILITY_SET_UP_ADDITIONAL_ID_IS_REQUIRED = 4;
+      CAPABILITY_DEVICE_SUPPORT_IS_NOT_GUARANTEED = 5;
+    }
+
+    enum OperatingMode {
+      OPERATING_MODE_UNSPECIFIED = 0;
+      OPERATING_MODE_BISTABLE = 1;
+      OPERATING_MODE_IMPULSE = 2;
+    }
+
+    enum State {
+      STATE_UNSPECIFIED = 0;
+      STATE_LOWERED = 1;
+      STATE_RAISED = 2;
+    }
+  }
+
+  message ThirdPartyDeviceSensorsPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSensorsPart.Sensor.SensorSettings sensors = 1;
+  }
+}

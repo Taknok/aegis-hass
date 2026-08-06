@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message PermittedUsersCountPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.PermittedUsersCountPart.PermittedUsersCount permitted_users_count = 1;
+
+  message PermittedUsersCount {
+    oneof kind {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.PermittedUsersCountPart.PermittedUsersCount.ManageSmartLock manage_smart_lock = 1;
+    }
+
+    message ManageSmartLock {
+      int32 permitted_users_count = 1;
+    }
+  }
+}

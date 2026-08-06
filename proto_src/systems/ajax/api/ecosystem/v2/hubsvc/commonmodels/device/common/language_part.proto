@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/language.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message LanguagePart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Language language = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Language available_languages = 2;
+
+  message LanguagePartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Language language = 1;
+  }
+}

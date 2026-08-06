@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice";
+option swift_prefix = "";
+
+message AccessDeviceSecurityPart {
+  bool perimeter_arm = 1;
+  repeated .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceSecurityPart.GroupPermissions group_permissions = 2;
+  repeated .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceSecurityPart.AccessDeviceSecurityCapability access_device_security_capabilities = 3;
+
+  message GroupPermissions {
+    string group_id = 1;
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceSecurityPart.GroupPermissionsState group_permissions_state = 2;
+  }
+
+  message AccessDeviceSecuritySettings {
+    bool perimeter_arm = 1;
+    repeated .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceSecurityPart.GroupPermissions group_permissions = 2;
+  }
+
+  enum GroupPermissionsState {
+    GROUP_PERMISSIONS_STATE_UNSPECIFIED = 0;
+    GROUP_PERMISSIONS_STATE_ENABLED = 1;
+    GROUP_PERMISSIONS_STATE_DISABLED = 2;
+  }
+
+  enum AccessDeviceSecurityCapability {
+    ACCESS_DEVICE_SECURITY_CAPABILITY_UNSPECIFIED = 0;
+    ACCESS_DEVICE_SECURITY_CAPABILITY_SETTINGS = 1;
+    ACCESS_DEVICE_SECURITY_CAPABILITY_PERIMETER_ARM = 2;
+  }
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "Common";
+
+enum TakeoverModuleCompatibilityMode {
+  TAKEOVER_MODULE_COMPATIBILITY_MODE_UNSPECIFIED = 0;
+  TAKEOVER_MODULE_COMPATIBILITY_MODE_HONEYWELL_RESIDEO_2GIG = 1;
+  TAKEOVER_MODULE_COMPATIBILITY_MODE_QOLSYS_INTERLOGIX = 2;
+  TAKEOVER_MODULE_COMPATIBILITY_MODE_DSC = 3;
+  TAKEOVER_MODULE_COMPATIBILITY_MODE_AT_AND_T = 4;
+}

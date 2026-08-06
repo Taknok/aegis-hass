@@ -47,21 +47,23 @@ def _hub_device_with_case(field_number: int) -> Message:
 
 
 class TestUnmodelledDeviceCaseNumbers:
+    # 81 and 113 are `life_quality` and `roller_shutter_ws`: real families that
+    # hub_device.proto deliberately leaves out, because the app ships no
+    # definition for the parts they embed. Being unmodelled by decision rather
+    # than by accident is what makes them stable fixtures here.
     def test_reports_the_wire_number_of_an_unmodelled_case(self) -> None:
-        # 40 is `motion_protect_curtain` (the indoor variant) — one of the five
-        # families @wip3out3r measured as unreadable.
-        device = _hub_device_with_case(40)
+        device = _hub_device_with_case(81)
 
         assert device.WhichOneof("device") is None, "precondition: case must be unmodelled"
-        assert unmodelled_device_case_numbers(device) == [40]
+        assert unmodelled_device_case_numbers(device) == [81]
 
     def test_reports_a_case_number_above_one_byte_of_varint(self) -> None:
-        """Numbers past 15 push the tag into a multi-byte varint; the highest
-        modelled case is already 68, so the diagnostic must survive that."""
-        device = _hub_device_with_case(116)
+        """Numbers past 15 push the tag into a multi-byte varint, and every
+        case worth reporting now sits well above that."""
+        device = _hub_device_with_case(113)
 
         assert device.WhichOneof("device") is None
-        assert unmodelled_device_case_numbers(device) == [116]
+        assert unmodelled_device_case_numbers(device) == [113]
 
     def test_returns_empty_for_a_modelled_case(self) -> None:
         from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device import (
@@ -104,7 +106,7 @@ class TestProbeReportsTheCaseNumber:
         msg = MagicMock()
         msg.HasField.side_effect = lambda field: field == "success"
         msg.success.WhichOneof.return_value = "snapshot"
-        msg.success.snapshot.hub_device = _hub_device_with_case(93)  # space_control
+        msg.success.snapshot.hub_device = _hub_device_with_case(81)  # life_quality
 
         async def _aiter(*args: object, **kwargs: object) -> AsyncGenerator[MagicMock, None]:
             yield msg
@@ -132,4 +134,4 @@ class TestProbeReportsTheCaseNumber:
             result = await api.get_hub_device_temperature("hub-1", "dev-1")
 
         assert result is None
-        assert "unmodelled_case_numbers=[93]" in caplog.text
+        assert "unmodelled_case_numbers=[81]" in caplog.text

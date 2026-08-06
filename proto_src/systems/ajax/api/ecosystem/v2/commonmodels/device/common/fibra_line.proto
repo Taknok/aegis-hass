@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.common";
+option swift_prefix = "";
+
+message FibraLine {
+  oneof type {
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.FibraLine.Line line = 1;
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.FibraLine.Ring ring = 2;
+  }
+
+  message Line {
+    int32 value = 1;
+  }
+
+  message Ring {
+    int32 input = 1;
+    int32 output = 2;
+  }
+}

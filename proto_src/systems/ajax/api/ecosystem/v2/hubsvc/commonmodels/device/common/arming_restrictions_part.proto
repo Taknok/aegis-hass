@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ArmingRestrictionsPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmingRestrictionsPart.IntegrityCheck integrity_checks = 1;
+
+  message ArmingRestrictionsPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmingRestrictionsPart.IntegrityCheck integrity_checks = 1;
+  }
+
+  message IntegrityCheck {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmingRestrictionsPart.IntegrityCheckType integrity_check_type = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmingRestrictionsPart.IsEnabled is_enabled = 2;
+  }
+
+  enum IntegrityCheckType {
+    INTEGRITY_CHECK_TYPE_UNSPECIFIED = 0;
+    INTEGRITY_CHECK_TYPE_TAMPER = 1;
+  }
+
+  enum IsEnabled {
+    IS_ENABLED_UNSPECIFIED = 0;
+    IS_ENABLED_DISABLED = 1;
+    IS_ENABLED_ENABLED = 2;
+  }
+}

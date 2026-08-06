@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "google/protobuf/timestamp.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message CommonBatteryPingsPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart.BatteryPingSetting battery_ping_settings = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart.BatteryPingSettingType available_battery_ping_setting_types = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart.BatteryPingStatus battery_ping_status = 3;
+  .google.protobuf.Timestamp battery_ping_last_update_time = 4;
+
+  message CommonBatteryPingsPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart.BatteryPingSetting battery_ping_settings = 1;
+  }
+
+  message BatteryPingSetting {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart.BatteryPingSettingType setting_type = 1;
+    bool enabled = 2;
+  }
+
+  enum BatteryPingSettingType {
+    BATTERY_PING_SETTING_TYPE_UNSPECIFIED = 0;
+    BATTERY_PING_SETTING_TYPE_CHARGE_AUTO_CHECK = 1;
+    BATTERY_PING_SETTING_TYPE_EVENT_PINGS_FAILED_THREE_DAYS = 2;
+  }
+
+  enum BatteryPingStatus {
+    BATTERY_PING_STATUS_UNSPECIFIED = 0;
+    BATTERY_PING_STATUS_OK = 1;
+    BATTERY_PING_STATUS_NOT_OK = 2;
+  }
+}

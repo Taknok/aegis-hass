@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/assigned_extender_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/bypass_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/cms_device_index_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_battery_pings_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_manage_button_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_battery.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_common_capabilities_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_fire_zone_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_location_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_migration_status_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_profile_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_siren_triggers.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_telemetry_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/led_indication_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/self_monitoring_part.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message Button {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart common_manage_button_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceFireZonePart device_fire_zone_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceLocationPart device_location_part = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart common_battery_pings_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceProfilePart device_profile_part = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AssignedExtenderPart assigned_extender_part = 10;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CmsDeviceIndexPart cms_device_index_part = 11;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.BypassPart bypass_part = 12;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceMigrationStatusPart device_migration_status_part = 13;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceCommonCapabilitiesPart device_common_capabilities_part = 15;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTelemetryPart device_telemetry_part = 16;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SelfMonitoringPart self_monitoring_part = 17;
+}
+
+message ButtonS {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart common_manage_button_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceFireZonePart device_fire_zone_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceLocationPart device_location_part = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonBatteryPingsPart common_battery_pings_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceProfilePart device_profile_part = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AssignedExtenderPart assigned_extender_part = 10;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CmsDeviceIndexPart cms_device_index_part = 11;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.BypassPart bypass_part = 12;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceMigrationStatusPart device_migration_status_part = 13;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceCommonCapabilitiesPart device_common_capabilities_part = 15;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTelemetryPart device_telemetry_part = 16;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SelfMonitoringPart self_monitoring_part = 17;
+}

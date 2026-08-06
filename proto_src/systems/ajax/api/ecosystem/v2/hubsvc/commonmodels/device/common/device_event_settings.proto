@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/patch_type.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message CommonEventSettingsPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonEventSettingsPart.EventSetting enabled_event_settings = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonEventSettingsPart.EventSetting event_settings_capabilities = 2;
+
+  message EventSettingsPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonEventSettingsPart.EventSettingsPatch event_settings = 1;
+  }
+
+  message EventSettingsPatch {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonEventSettingsPart.EventSetting event_settings = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.PatchType patch_type = 2;
+  }
+
+  enum EventSetting {
+    EVENT_SETTING_UNSPECIFIED = 0;
+    EVENT_SETTING_EVENT_BY_USER_ENABLED = 1;
+    EVENT_SETTING_EVENT_BY_SCENARIO_ENABLED = 2;
+    EVENT_SETTING_EVENT_BY_DOOR_OPEN = 3;
+  }
+}

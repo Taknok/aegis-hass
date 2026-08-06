@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ExternalTamperPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalTamperPart.ExternalTamperStatus external_tamper_status = 1;
+
+  enum ExternalTamperStatus {
+    EXTERNAL_TAMPER_STATUS_UNSPECIFIED = 0;
+    EXTERNAL_TAMPER_STATUS_NOT_CONNECTED = 1;
+    EXTERNAL_TAMPER_STATUS_CONNECTED = 2;
+  }
+}

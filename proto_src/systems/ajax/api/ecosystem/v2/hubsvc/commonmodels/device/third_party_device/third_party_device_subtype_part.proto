@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_subtype.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceSubtypePart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSubtype third_party_device_subtype = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSubtypePart.Capability capabilities = 100;
+
+  message ThirdPartyDeviceSubtypePartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceSubtype third_party_device_subtype = 1;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_THIRD_PARTY_DEVICE_SUBTYPE_REQUIRED = 1;
+  }
+}

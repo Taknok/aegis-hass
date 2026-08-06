@@ -8,19 +8,31 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from systems.ajax.api.ecosystem.v2.commonmodels.device.common import common_arming_part_pb2 as _common_arming_part_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import always_active_part_pb2 as _always_active_part_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import common_door_protect_part_pb2 as _common_door_protect_part_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import common_extra_contact_sensor_part_pb2 as _common_extra_contact_sensor_part_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import common_fibra_part_pb2 as _common_fibra_part_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import common_jeweller_part_pb2 as _common_jeweller_part_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import common_wings_part_pb2 as _common_wings_part_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_battery_pb2 as _device_battery_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_chimes_pb2 as _device_chimes_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_siren_triggers_pb2 as _device_siren_triggers_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_tamper_status_pb2 as _device_tamper_status_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_temperature_pb2 as _device_temperature_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_warnings_pb2 as _device_warnings_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import fast_tamper_part_pb2 as _fast_tamper_part_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import fast_tamper_pb2 as _fast_tamper_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import led_indication_part_pb2 as _led_indication_part_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import reed_contact_part_pb2 as _reed_contact_part_pb2
 import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias as _TypeAlias
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    from typing_extensions import TypeAlias as _TypeAlias
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 if sys.version_info >= (3, 13):
     from warnings import deprecated as _deprecated
@@ -76,18 +88,10 @@ class DoorProtect(_message.Message):
     def device_battery(self) -> _device_battery_pb2.DeviceBattery: ...
     @_builtins.property
     @_deprecated("""This field has been marked as deprecated using proto field options.""")
-    def deprecated_siren_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtect.DeprecatedSirenTrigger.ValueType]:
-        """*
-        DEPRECATED
-
-        use common.SirenTriggers
-        """
-
+    def deprecated_siren_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtect.DeprecatedSirenTrigger.ValueType]: ...
     @_builtins.property
     @_deprecated("""This field has been marked as deprecated using proto field options.""")
-    def deprecated_chime_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtect.DeprecatedChimeTrigger.ValueType]:
-        """use common.DeviceChimes"""
-
+    def deprecated_chime_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtect.DeprecatedChimeTrigger.ValueType]: ...
     def __init__(
         self,
         *,
@@ -101,6 +105,7 @@ class DoorProtect(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part", "common_jeweller_part", b"common_jeweller_part", "deprecated_chime_triggers", b"deprecated_chime_triggers", "deprecated_siren_triggers", b"deprecated_siren_triggers", "device_battery", b"device_battery"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DoorProtect: _TypeAlias = DoorProtect  # noqa: Y015
 
@@ -155,23 +160,13 @@ class DoorProtectS(_message.Message):
     def fast_tamper_part(self) -> _fast_tamper_part_pb2.FastTamperPart: ...
     @_builtins.property
     @_deprecated("""This field has been marked as deprecated using proto field options.""")
-    def deprecated_siren_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtectS.DeprecatedSirenTrigger.ValueType]:
-        """*
-        DEPRECATED
-
-        use common.SirenTriggers
-        """
-
+    def deprecated_siren_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtectS.DeprecatedSirenTrigger.ValueType]: ...
     @_builtins.property
     @_deprecated("""This field has been marked as deprecated using proto field options.""")
-    def deprecated_chime_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtectS.DeprecatedChimeTrigger.ValueType]:
-        """use common.DeviceChimes"""
-
+    def deprecated_chime_triggers(self) -> _containers.RepeatedScalarFieldContainer[Global___DoorProtectS.DeprecatedChimeTrigger.ValueType]: ...
     @_builtins.property
     @_deprecated("""This field has been marked as deprecated using proto field options.""")
-    def fast_tamper(self) -> _fast_tamper_pb2.FastTamper:
-        """use common.FastTamperPart"""
-
+    def fast_tamper(self) -> _fast_tamper_pb2.FastTamper: ...
     def __init__(
         self,
         *,
@@ -187,5 +182,237 @@ class DoorProtectS(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part", "common_jeweller_part", b"common_jeweller_part", "deprecated_chime_triggers", b"deprecated_chime_triggers", "deprecated_siren_triggers", b"deprecated_siren_triggers", "device_battery", b"device_battery", "fast_tamper", b"fast_tamper", "fast_tamper_part", b"fast_tamper_part"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DoorProtectS: _TypeAlias = DoorProtectS  # noqa: Y015
+
+@_typing.final
+class DoorProtectPlus(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_DOOR_PROTECT_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_door_protect_part(self) -> _common_door_protect_part_pb2.CommonDoorProtectPart: ...
+    def __init__(
+        self,
+        *,
+        common_door_protect_part: _common_door_protect_part_pb2.CommonDoorProtectPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectPlus: _TypeAlias = DoorProtectPlus  # noqa: Y015
+
+@_typing.final
+class DoorProtectFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_DOOR_PROTECT_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_door_protect_part(self) -> _common_door_protect_part_pb2.CommonDoorProtectPart: ...
+    def __init__(
+        self,
+        *,
+        common_door_protect_part: _common_door_protect_part_pb2.CommonDoorProtectPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectFibra: _TypeAlias = DoorProtectFibra  # noqa: Y015
+
+@_typing.final
+class DoorProtectPlusFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_DOOR_PROTECT_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_door_protect_part(self) -> _common_door_protect_part_pb2.CommonDoorProtectPart: ...
+    def __init__(
+        self,
+        *,
+        common_door_protect_part: _common_door_protect_part_pb2.CommonDoorProtectPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectPlusFibra: _TypeAlias = DoorProtectPlusFibra  # noqa: Y015
+
+@_typing.final
+class DoorProtectSPlus(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_DOOR_PROTECT_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_door_protect_part(self) -> _common_door_protect_part_pb2.CommonDoorProtectPart: ...
+    def __init__(
+        self,
+        *,
+        common_door_protect_part: _common_door_protect_part_pb2.CommonDoorProtectPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectSPlus: _TypeAlias = DoorProtectSPlus  # noqa: Y015
+
+@_typing.final
+class DoorProtectG3(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_DOOR_PROTECT_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_door_protect_part(self) -> _common_door_protect_part_pb2.CommonDoorProtectPart: ...
+    def __init__(
+        self,
+        *,
+        common_door_protect_part: _common_door_protect_part_pb2.CommonDoorProtectPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectG3: _TypeAlias = DoorProtectG3  # noqa: Y015
+
+@_typing.final
+class DoorProtectPlusG3Fibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_DOOR_PROTECT_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_door_protect_part(self) -> _common_door_protect_part_pb2.CommonDoorProtectPart: ...
+    def __init__(
+        self,
+        *,
+        common_door_protect_part: _common_door_protect_part_pb2.CommonDoorProtectPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_door_protect_part", b"common_door_protect_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectPlusG3Fibra: _TypeAlias = DoorProtectPlusG3Fibra  # noqa: Y015
+
+@_typing.final
+class DoorProtectFibraVds(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    DEVICE_TEMPERATURE_FIELD_NUMBER: _builtins.int
+    COMMON_FIBRA_PART_FIELD_NUMBER: _builtins.int
+    DEVICE_WARNINGS_FIELD_NUMBER: _builtins.int
+    REED_CONTACT_PART_FIELD_NUMBER: _builtins.int
+    SIREN_TRIGGERS_FIELD_NUMBER: _builtins.int
+    DEVICE_CHIMES_FIELD_NUMBER: _builtins.int
+    ALWAYS_ACTIVE_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    @_builtins.property
+    def device_temperature(self) -> _device_temperature_pb2.DeviceTemperature: ...
+    @_builtins.property
+    def common_fibra_part(self) -> _common_fibra_part_pb2.CommonFibraPart: ...
+    @_builtins.property
+    def device_warnings(self) -> _device_warnings_pb2.DeviceWarnings: ...
+    @_builtins.property
+    def reed_contact_part(self) -> _reed_contact_part_pb2.ReedContactPart: ...
+    @_builtins.property
+    def siren_triggers(self) -> _device_siren_triggers_pb2.SirenTriggers: ...
+    @_builtins.property
+    def device_chimes(self) -> _device_chimes_pb2.DeviceChimes: ...
+    @_builtins.property
+    def always_active_part(self) -> _always_active_part_pb2.AlwaysActivePart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+        device_temperature: _device_temperature_pb2.DeviceTemperature | None = ...,
+        common_fibra_part: _common_fibra_part_pb2.CommonFibraPart | None = ...,
+        device_warnings: _device_warnings_pb2.DeviceWarnings | None = ...,
+        reed_contact_part: _reed_contact_part_pb2.ReedContactPart | None = ...,
+        siren_triggers: _device_siren_triggers_pb2.SirenTriggers | None = ...,
+        device_chimes: _device_chimes_pb2.DeviceChimes | None = ...,
+        always_active_part: _always_active_part_pb2.AlwaysActivePart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["always_active_part", b"always_active_part", "common_arming_part", b"common_arming_part", "common_fibra_part", b"common_fibra_part", "device_chimes", b"device_chimes", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "reed_contact_part", b"reed_contact_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["always_active_part", b"always_active_part", "common_arming_part", b"common_arming_part", "common_fibra_part", b"common_fibra_part", "device_chimes", b"device_chimes", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "reed_contact_part", b"reed_contact_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectFibraVds: _TypeAlias = DoorProtectFibraVds  # noqa: Y015
+
+@_typing.final
+class DoorProtectOutdoor(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_JEWELLER_PART_FIELD_NUMBER: _builtins.int
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    DEVICE_TEMPERATURE_FIELD_NUMBER: _builtins.int
+    DEVICE_TAMPER_STATUS_FIELD_NUMBER: _builtins.int
+    SIREN_TRIGGERS_FIELD_NUMBER: _builtins.int
+    DEVICE_CHIMES_FIELD_NUMBER: _builtins.int
+    EXTRA_CONTACT_SENSOR_PART_FIELD_NUMBER: _builtins.int
+    REED_CONTACT_PART_FIELD_NUMBER: _builtins.int
+    DEVICE_BATTERY_WITHOUT_CHARGING_FIELD_NUMBER: _builtins.int
+    ALWAYS_ACTIVE_PART_FIELD_NUMBER: _builtins.int
+    COMMON_WINGS_PART_FIELD_NUMBER: _builtins.int
+    LED_INDICATION_PART_FIELD_NUMBER: _builtins.int
+    device_tamper_status: _device_tamper_status_pb2.DeviceTamperStatus.ValueType
+    @_builtins.property
+    def common_jeweller_part(self) -> _common_jeweller_part_pb2.CommonJewellerPart: ...
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    @_builtins.property
+    def device_temperature(self) -> _device_temperature_pb2.DeviceTemperature: ...
+    @_builtins.property
+    def siren_triggers(self) -> _device_siren_triggers_pb2.SirenTriggers: ...
+    @_builtins.property
+    def device_chimes(self) -> _device_chimes_pb2.DeviceChimes: ...
+    @_builtins.property
+    def extra_contact_sensor_part(self) -> _common_extra_contact_sensor_part_pb2.ExtraContactSensorPart: ...
+    @_builtins.property
+    def reed_contact_part(self) -> _reed_contact_part_pb2.ReedContactPart: ...
+    @_builtins.property
+    def device_battery_without_charging(self) -> _device_battery_pb2.DeviceBatteryWithoutCharging: ...
+    @_builtins.property
+    def always_active_part(self) -> _always_active_part_pb2.AlwaysActivePart: ...
+    @_builtins.property
+    def common_wings_part(self) -> _common_wings_part_pb2.CommonWingsPart: ...
+    @_builtins.property
+    def led_indication_part(self) -> _led_indication_part_pb2.LedIndicationPart: ...
+    def __init__(
+        self,
+        *,
+        common_jeweller_part: _common_jeweller_part_pb2.CommonJewellerPart | None = ...,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+        device_temperature: _device_temperature_pb2.DeviceTemperature | None = ...,
+        device_tamper_status: _device_tamper_status_pb2.DeviceTamperStatus.ValueType = ...,
+        siren_triggers: _device_siren_triggers_pb2.SirenTriggers | None = ...,
+        device_chimes: _device_chimes_pb2.DeviceChimes | None = ...,
+        extra_contact_sensor_part: _common_extra_contact_sensor_part_pb2.ExtraContactSensorPart | None = ...,
+        reed_contact_part: _reed_contact_part_pb2.ReedContactPart | None = ...,
+        device_battery_without_charging: _device_battery_pb2.DeviceBatteryWithoutCharging | None = ...,
+        always_active_part: _always_active_part_pb2.AlwaysActivePart | None = ...,
+        common_wings_part: _common_wings_part_pb2.CommonWingsPart | None = ...,
+        led_indication_part: _led_indication_part_pb2.LedIndicationPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["always_active_part", b"always_active_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_wings_part", b"common_wings_part", "device_battery_without_charging", b"device_battery_without_charging", "device_chimes", b"device_chimes", "device_temperature", b"device_temperature", "extra_contact_sensor_part", b"extra_contact_sensor_part", "led_indication_part", b"led_indication_part", "reed_contact_part", b"reed_contact_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["always_active_part", b"always_active_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_wings_part", b"common_wings_part", "device_battery_without_charging", b"device_battery_without_charging", "device_chimes", b"device_chimes", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "extra_contact_sensor_part", b"extra_contact_sensor_part", "led_indication_part", b"led_indication_part", "reed_contact_part", b"reed_contact_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DoorProtectOutdoor: _TypeAlias = DoorProtectOutdoor  # noqa: Y015

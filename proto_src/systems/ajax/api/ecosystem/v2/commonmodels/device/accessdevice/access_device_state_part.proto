@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice";
+option swift_prefix = "";
+
+message AccessDeviceStatePart {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceStatePart.AccessDeviceState access_device_state = 1;
+
+  message AccessDeviceStateSettings {
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceStatePart.AccessDeviceState access_device_state = 1;
+  }
+
+  enum AccessDeviceState {
+    ACCESS_DEVICE_STATE_UNSPECIFIED = 0;
+    ACCESS_DEVICE_STATE_ENABLED = 1;
+    ACCESS_DEVICE_STATE_DISABLED = 2;
+  }
+}

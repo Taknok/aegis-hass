@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+enum ThirdPartyDeviceIdFormat {
+  THIRD_PARTY_DEVICE_ID_FORMAT_UNSPECIFIED = 0;
+  THIRD_PARTY_DEVICE_ID_FORMAT_6_DIGIT_HEXADECIMAL = 1;
+  THIRD_PARTY_DEVICE_ID_FORMAT_7_DIGIT_NUMERIC = 2;
+}

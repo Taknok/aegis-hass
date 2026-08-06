@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message EthernetPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.EthernetPart.EthernetStatus ethernet_status = 1;
+  bool is_ethernet_enabled = 2;
+  bool is_dhcp_enabled = 3;
+  string mac_address = 4;
+  string ip = 5;
+  string mask = 6;
+  string gate = 7;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.EthernetPart.Capability capabilities = 8;
+
+  enum EthernetStatus {
+    ETHERNET_STATUS_UNSPECIFIED = 0;
+    ETHERNET_STATUS_NOT_OK = 1;
+    ETHERNET_STATUS_OK = 2;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_ETHERNET = 1;
+  }
+}

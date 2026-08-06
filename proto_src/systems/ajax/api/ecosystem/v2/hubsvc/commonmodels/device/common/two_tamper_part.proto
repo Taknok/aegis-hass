@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message TwoTamperPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.TwoTamperPart.LidConnectionState lid_connection_state = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.TwoTamperPart.FailureStatus failure_status = 2;
+
+  enum LidConnectionState {
+    LID_CONNECTION_STATE_UNSPECIFIED = 0;
+    LID_CONNECTION_STATE_CLOSED = 1;
+    LID_CONNECTION_STATE_FRONT_LID_OPEN = 2;
+    LID_CONNECTION_STATE_DETACHED_FROM_SURFACE = 3;
+    LID_CONNECTION_STATE_DETACHED_FROM_SURFACE_AND_OPEN = 4;
+    LID_CONNECTION_STATE_DISCONNECTED = 5;
+  }
+
+  enum FailureStatus {
+    FAILURE_STATUS_UNSPECIFIED = 0;
+    FAILURE_STATUS_DEFAULT = 1;
+    FAILURE_STATUS_ATTENTION = 2;
+  }
+}

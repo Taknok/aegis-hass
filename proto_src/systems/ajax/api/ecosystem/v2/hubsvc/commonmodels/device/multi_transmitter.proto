@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/arming_restrictions_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_jeweller_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_wings_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_battery.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_device_notifications_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_siren_triggers.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_tamper_status.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/external_power.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/external_tamper_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/detectors_power_line_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/led_indication_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message MultiTransmitterG3 {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBattery device_battery = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalTamperPart external_tamper = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalPower external_power = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart detectors_power_line_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDeviceNotificationsPart device_notifications_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 10;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmingRestrictionsPart arming_restrictions_part = 11;
+}

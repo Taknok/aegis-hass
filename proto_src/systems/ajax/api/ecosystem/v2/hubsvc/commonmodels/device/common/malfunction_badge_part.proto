@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message MalfunctionBadgePart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart.MalfunctionBadge malfunction_badge = 1;
+
+  message MalfunctionBadgePartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart.MalfunctionBadge malfunction_badge = 1;
+  }
+
+  message MalfunctionBadge {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart.MalfunctionType malfunction_type = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart.IsEnabled is_enabled = 2;
+  }
+
+  enum MalfunctionType {
+    MALFUNCTION_TYPE_UNSPECIFIED = 0;
+    MALFUNCTION_TYPE_JEWELLER_CONNECTION_LOSS = 1;
+  }
+
+  enum IsEnabled {
+    IS_ENABLED_UNSPECIFIED = 0;
+    IS_ENABLED_DISABLED = 1;
+    IS_ENABLED_ENABLED = 2;
+  }
+}

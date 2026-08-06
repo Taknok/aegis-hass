@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
 
+### Changed
+- **The integration now understands 107 device families on the rich per-device read, up from 33 (#408).** That read is the only source for several per-device details — internal temperature, siren volume and duration, whether a device is deactivated — and for most families it returned nothing at all, because our copy of the protocol didn't describe them. The device wasn't broken and nothing was logged; the data simply had nowhere to land. One reporter measured 8 of his 13 devices reading as empty.
+
+  This is why the same underlying gap was fixed four separate times, once per family (#229, #339, #354, #383), each costing whoever owned the hardware a capture and several restarts. The definitions are now taken wholesale rather than one family at a time.
+
+  **What it does not do is invent data.** A family being understood does not mean it reports anything: several carry nothing but their arming state, and the outdoor curtain PIRs still have no temperature here — theirs continues to come from the hub status stream. Of the 107, 42 expose the deactivation detail behind #338 and 13 an internal temperature. Four families are deliberately still not modelled (LifeQuality, LifeQuality Lite and the two roller shutters): part of their definition isn't available to us, and a placeholder would be indistinguishable from a device reporting nothing — they are reported by the probe above instead. Found by @wip3out3r.
+
 ### Fixed
 - **A device family our copy of the protocol doesn't describe no longer disappears without trace (#408).** When the hub reports a device in a shape we don't model, the data is discarded before the integration ever sees it — silently, at every log level. "This family is missing from our definitions" and "this device reports nothing" therefore produced identical logs, so each affected family had to be diagnosed from scratch by whoever owned the hardware, which is how the same underlying gap came to be fixed four separate times (#229, #339, #354, #383).
 

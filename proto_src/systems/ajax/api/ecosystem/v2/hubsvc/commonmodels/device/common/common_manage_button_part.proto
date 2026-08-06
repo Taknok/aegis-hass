@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message CommonManageButtonPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.PanicEnabled panic_enabled = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.FalsePressFilter false_press_filter = 2;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.FalsePressFilter false_press_filter_capabilities = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.OperatingMode operating_mode = 4;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.OperatingMode available_operating_modes = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.EventType event_type = 6;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.EventType available_event_types = 7;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.Capability capabilities = 100;
+
+  message CommonManageButtonPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.PanicEnabled panic_enabled = 2;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.FalsePressFilter false_press_filter = 3;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.OperatingMode operating_mode = 4;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonManageButtonPart.EventType event_type = 5;
+  }
+
+  enum PanicEnabled {
+    PANIC_ENABLED_UNSPECIFIED = 0;
+    PANIC_ENABLED_DISABLED = 1;
+    PANIC_ENABLED_ENABLED = 2;
+  }
+
+  enum FalsePressFilter {
+    FALSE_PRESS_FILTER_UNSPECIFIED = 0;
+    FALSE_PRESS_FILTER_DISABLED = 1;
+    FALSE_PRESS_FILTER_LONG_PUSH = 2;
+    FALSE_PRESS_FILTER_DOUBLE_CLICK = 3;
+  }
+
+  enum OperatingMode {
+    OPERATING_MODE_UNSPECIFIED = 0;
+    OPERATING_MODE_PANIC = 1;
+    OPERATING_MODE_CONTROL = 2;
+    OPERATING_MODE_MUTE_FIRE_ALARM = 3;
+    OPERATING_MODE_EN54_POSTPONE_FIRE_ALARM = 4;
+  }
+
+  enum EventType {
+    EVENT_TYPE_UNSPECIFIED = 0;
+    EVENT_TYPE_INTRUSION = 1;
+    EVENT_TYPE_FIRE_ALARM = 2;
+    EVENT_TYPE_AUXILIARY_ALARM = 3;
+    EVENT_TYPE_PANIC_BUTTON = 4;
+    EVENT_TYPE_CO_ALARM = 5;
+    EVENT_TYPE_MALFUNCTION = 6;
+    EVENT_TYPE_LEAKAGE = 7;
+    EVENT_TYPE_CUSTOM = 8;
+    EVENT_TYPE_GAS_ALARM = 9;
+    EVENT_TYPE_SERVICE = 10;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_PANIC_ENABLED = 1;
+    CAPABILITY_FALSE_PRESS_FILTER = 2;
+    CAPABILITY_OPERATING_MODE = 3;
+    CAPABILITY_EVENT_TYPE = 4;
+  }
+}

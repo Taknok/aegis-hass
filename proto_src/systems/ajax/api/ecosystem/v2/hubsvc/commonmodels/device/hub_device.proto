@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
 
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/button.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/home_siren_fibra.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/home_siren.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/street_siren.proto";
@@ -10,51 +11,154 @@ import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/double_button.p
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/en54_fire_base.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/motion_protect.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/motion_protect_curtain_outdoor.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/motion_cam.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/smart_lock.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/range_extender2.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/multi_transmitter.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/combi_protect.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/takeover_module.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/accessdevice/access_card.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/transmitter_fibra_base.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/motion_cam_video.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/glass_protect.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/transmitter.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/wire_input_mt.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/wire_input.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/space_control.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/keypad.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/key_arm.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/access_code.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/z_wave_device.proto";
 
-option swift_prefix = "Hub";
-option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
 option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "Hub";
 
+// The `device` oneof models 107 of the families defined upstream (#408).
+//
+// Four are deliberately left out — `life_quality` (81), `life_quality_lite`
+// (111), `roller_shutter_ls` (112) and `roller_shutter_ws` (113). Each embeds a
+// part whose definition is not available to us, and a stub carrying none of it
+// would decode to an empty message: indistinguishable from a device that
+// reports nothing. Left unmodelled, they surface through the unknown-case probe
+// instead, which names the wire number.
+//
+// A modelled case is not a promise of data. Several families carry only
+// `common_arming_part`, so the case resolves with nothing to read — the outdoor
+// curtains are the example that matters, and their temperature still comes from
+// the status stream (#229). Of the 107: 42 carry `common_jeweller_part`, which
+// holds `bypass_part` (#338), `space_control` carries `bypass_part` directly,
+// and 13 carry an internal temperature.
 message HubDevice {
+  reserved 103;
   oneof device {
-    DoorProtect door_protect = 1;
-    DoorProtectS door_protect_s = 2;
-    DoubleButton double_button = 3;
-    En54A en54_a = 4;
-    En54Va en54_va = 5;
-    En54V en54_v = 6;
-    En54HVa en54_h_va = 7;
-    En54HsVa en54_hs_va = 8;
-    En54H en54_h = 9;
-    En54S en54_s = 10;
-    En54SV en54_s_v = 11;
-    En54SA en54_s_a = 12;
-    En54HV en54_h_v = 13;
-    En54Ha en54_h_a = 14;
-    MotionProtect motion_protect = 15;
-    MotionProtectS motion_protect_s = 16;
-    HomeSirenFibra home_siren_fibra = 17;
-    HomeSiren home_siren = 18;
-    StreetSiren street_siren = 19;
-    StreetSirenPlusG3 street_siren_plus_g3 = 20;
-    MotionProtectCurtainOutdoorMini motion_protect_curtain_outdoor_mini = 21;
-    HomeSirenG3 home_siren_g3 = 22;
-    HomeSirenS home_siren_s = 23;
-    MotionProtectG3 motion_protect_g3 = 24;
-    MotionProtectPlusG3 motion_protect_plus_g3 = 25;
-    SmartLockYale smart_lock_yale = 26;
-    // The remaining siren SKUs (#354). Cases 27-61 and 69+ exist upstream for
-    // other device families but are not modelled here yet — an unmodelled case
-    // decodes as an unknown oneof, which is what kept these sirens' settings
-    // unreadable. Only the siren block is filled in; extend the rest alongside
-    // the device families that need it.
-    StreetSirenS street_siren_s = 62;
-    StreetSirenDoubleDeck street_siren_double_deck = 63;
-    StreetSirenSDoubleDeck street_siren_s_double_deck = 64;
-    StreetSirenFibra street_siren_fibra = 65;
-    StreetSirenDoubleDeckFibra street_siren_double_deck_fibra = 66;
-    StreetSirenPlusFibra street_siren_plus_fibra = 67;
-    HomeSirenPlus home_siren_plus = 68;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtect door_protect = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectS door_protect_s = 2;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoubleButton double_button = 3;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54A en54_a = 4;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54Va en54_va = 5;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54V en54_v = 6;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54HVa en54_h_va = 7;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54HsVa en54_hs_va = 8;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54H en54_h = 9;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54S en54_s = 10;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54SV en54_s_v = 11;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54SA en54_s_a = 12;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54HV en54_h_v = 13;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.En54Ha en54_h_a = 14;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtect motion_protect = 15;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectS motion_protect_s = 16;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.HomeSirenFibra home_siren_fibra = 17;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.HomeSiren home_siren = 18;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSiren street_siren = 19;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenPlusG3 street_siren_plus_g3 = 20;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectCurtainOutdoorMini motion_protect_curtain_outdoor_mini = 21;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.HomeSirenG3 home_siren_g3 = 22;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.HomeSirenS home_siren_s = 23;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectG3 motion_protect_g3 = 24;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectPlusG3 motion_protect_plus_g3 = 25;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.SmartLockYale smart_lock_yale = 26;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamG3 motion_cam_g3 = 27;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.RangeExtender2 range_extender2 = 28;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.RangeExtender2Fire range_extender2_fire = 29;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.CurtainCamOutdoorHmPhod curtain_cam_outdoor_hm_phod = 30;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MultiTransmitterG3 multi_transmitter_g3 = 32;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.RangeExtender2S range_extender2_s = 33;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectPlus door_protect_plus = 34;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectFibra door_protect_fibra = 35;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectPlusFibra door_protect_plus_fibra = 36;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectSPlus door_protect_s_plus = 37;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectG3 door_protect_g3 = 38;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectPlusG3Fibra door_protect_plus_g3_fibra = 39;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectCurtain motion_protect_curtain = 40;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectFibra motion_protect_fibra = 41;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectG3Fibra motion_protect_g3_fibra = 42;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectG3FibraNew motion_protect_g3_fibra_new = 43;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectOutdoor motion_protect_outdoor = 44;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectPlusFibra motion_protect_plus_fibra = 45;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectSPlus motion_protect_s_plus = 46;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCam motion_cam = 47;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamFibra motion_cam_fibra = 48;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamFibraBase motion_cam_fibra_base = 49;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamHd motion_cam_hd = 50;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamPhod motion_cam_phod = 51;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamPhodFibra motion_cam_phod_fibra = 52;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamSPhod motion_cam_s_phod = 53;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamSPhodAm motion_cam_s_phod_am = 54;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamSuperiorPhod motion_cam_superior_phod = 55;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.CombiProtect combi_protect = 59;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.CombiProtectS combi_protect_s = 60;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.CombiProtectFibra combi_protect_fibra = 61;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenS street_siren_s = 62;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenDoubleDeck street_siren_double_deck = 63;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenSDoubleDeck street_siren_s_double_deck = 64;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenFibra street_siren_fibra = 65;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenDoubleDeckFibra street_siren_double_deck_fibra = 66;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.StreetSirenPlusFibra street_siren_plus_fibra = 67;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.HomeSirenPlus home_siren_plus = 68;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.WirelessTakeoverModule wireless_takeover_module = 69;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamOutdoor motion_cam_outdoor = 70;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamOutdoorPhod motion_cam_outdoor_phod = 71;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamOutdoorTwoFourPhod motion_cam_outdoor_two_four_phod = 72;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectPlus motion_protect_plus = 73;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectCurtainBase motion_protect_curtain_base = 74;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectCurtainOutdoorPlus motion_protect_curtain_outdoor_plus = 75;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DualCurtainOutdoor dual_curtain_outdoor = 76;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionProtectCurtainOutdoorBase motion_protect_curtain_outdoor_base = 77;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.ThirdPartyDevice third_party_device = 78;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.RangeExtender2Type4 range_extender_2_type4 = 79;
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessCard access_card = 80 [deprecated = true];
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.TransmitterFibra8Channels transmitter_fibra_8_channels = 82;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.TransmitterFibra8ChannelsInwall transmitter_fibra_8_channels_inwall = 83;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.GlassProtect glass_protect = 84;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.GlassProtectS glass_protect_s = 85;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.GlassProtectFibra glass_protect_fibra = 86;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.Transmitter transmitter = 87;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.WireInputMt wire_input_mt = 88;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.WireInputRs wire_input_rs = 89;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.WireInput wire_input = 90;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.MotionCamVideoDoorbell motion_cam_video_doorbell = 91;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectFibraVds door_protect_fibra_vds = 92;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.SpaceControl space_control = 93;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.SpaceControlS space_control_s = 94;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.AccessCode access_code = 95;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeyArm key_arm = 96;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.Keypad keypad = 97;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadFibra keypad_fibra = 98;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadCombi keypad_combi = 99;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadPlus keypad_plus = 100;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadPlusG3 keypad_plus_g3 = 101;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadSPlus keypad_s_plus = 102;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadOutdoor keypad_outdoor = 104;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadOutdoorFibra keypad_outdoor_fibra = 105;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadTouch keypad_touch = 106;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadTouchFibra keypad_touch_fibra = 107;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.KeypadTouchG3 keypad_touch_g3 = 108;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.DoorProtectOutdoor door_protect_outdoor = 109;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.RruAccessCode rru_access_code = 110;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.Button button = 114;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.ButtonS button_s = 115;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.ZWaveDevice z_wave_device = 116;
   }
 }

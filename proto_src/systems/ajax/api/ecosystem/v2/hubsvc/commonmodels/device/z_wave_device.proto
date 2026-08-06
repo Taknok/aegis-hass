@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_profile_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/z_wave_device/z_wave_device_clusters_part.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message ZWaveDevice {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceProfilePart device_profile_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device.ZWaveDeviceClustersPart z_wave_device_clusters_part = 2;
+}

@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message AdvancedEncryptionPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AdvancedEncryptionPart.AdvancedEncryption advanced_encryption = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AdvancedEncryptionPart.ActivationStatus activation_status = 2;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.AdvancedEncryptionPart.Capability capabilities = 3;
+
+  message ActivationStatus {
+    oneof status {
+      .google.protobuf.Empty not_activated = 1;
+      .google.protobuf.Empty in_progress = 2;
+      .google.protobuf.Empty activated = 3;
+      .google.protobuf.Empty failed = 4;
+    }
+  }
+
+  enum AdvancedEncryption {
+    ADVANCED_ENCRYPTION_UNSPECIFIED = 0;
+    ADVANCED_ENCRYPTION_DISABLED = 1;
+    ADVANCED_ENCRYPTION_ENABLED = 2;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_V2_ENCRYPTION = 1;
+    CAPABILITY_V2_ENCRYPTION_SETTING = 2;
+  }
+}

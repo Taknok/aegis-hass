@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message TakePhotoPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.TakePhotoPart.TakePhotoTrigger take_photo_triggers = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.TakePhotoPart.Capability capabilities = 1000;
+
+  message TakePhotoPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.TakePhotoPart.TakePhotoTrigger take_photo_triggers = 1;
+  }
+
+  message TakePhotoTrigger {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.TakePhotoPart.TriggerType trigger_type = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.TakePhotoPart.IsEnabled is_enabled = 2;
+  }
+
+  enum TriggerType {
+    TRIGGER_TYPE_UNSPECIFIED = 0;
+    TRIGGER_TYPE_IF_MASKING_DETECTED = 1;
+    TRIGGER_TYPE_IF_LID_OPENED = 2;
+    TRIGGER_TYPE_IF_DEVICE_MOVED = 3;
+  }
+
+  enum IsEnabled {
+    IS_ENABLED_UNSPECIFIED = 0;
+    IS_ENABLED_DISABLED = 1;
+    IS_ENABLED_ENABLED = 2;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_TAKE_PHOTO_TRIGGERS = 1;
+  }
+}

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message HoppingPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.HoppingPart.FrequencyHopping frequency_hopping = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.HoppingPart.Capability capabilities = 2;
+
+  enum FrequencyHopping {
+    FREQUENCY_HOPPING_UNSPECIFIED = 0;
+    FREQUENCY_HOPPING_INACTIVE = 1;
+    FREQUENCY_HOPPING_ACTIVE = 2;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_HOPPING_SUPPORTED = 1;
+    CAPABILITY_HOPPING_EU_TECHNOLOGY_REX_BRIDGE = 2;
+  }
+}

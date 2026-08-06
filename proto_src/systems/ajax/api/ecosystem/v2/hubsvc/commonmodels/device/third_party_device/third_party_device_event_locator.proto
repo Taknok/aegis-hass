@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_id.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceEventLocator {
+  oneof kind {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.HoneywellLoop honeywell_loop = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.ReportingId reporting_id = 2;
+  }
+
+  message HoneywellLoop {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId reporting_id = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.HoneywellLoop.LoopNumber loop_number = 2;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.HoneywellLoop.HoneywellLoops available_loops = 100;
+
+    message HoneywellLoops {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId reporting_id = 1;
+      repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.HoneywellLoop.LoopNumber loop_numbers = 2;
+    }
+
+    message HoneywellLoopSettings {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId.Type reporting_id_type = 1;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.HoneywellLoop.LoopNumber loop_number = 2;
+    }
+
+    enum LoopNumber {
+      LOOP_NUMBER_UNSPECIFIED = 0;
+      LOOP_NUMBER_1 = 1;
+      LOOP_NUMBER_2 = 2;
+      LOOP_NUMBER_3 = 3;
+    }
+  }
+
+  message ReportingId {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId.Type reporting_id_type = 1;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId.Type available_reporting_id_types = 100;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId.Type configured_reporting_id_types = 101;
+
+    message ReportingIdSettings {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId.Type reporting_id_type = 1;
+    }
+  }
+
+  message ThirdPartyDeviceEventLocatorSettings {
+    oneof kind {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.HoneywellLoop.HoneywellLoopSettings honeywell_loop = 1;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.ReportingId.ReportingIdSettings reporting_id = 2;
+    }
+  }
+}

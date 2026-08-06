@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_jeweller_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_wings_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/external_power.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_tamper_status.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/led_indication_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/integration_compatibility_mode_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/third_party_device_offline_timeout_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/radio_interference_detection_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_battery.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message WirelessTakeoverModule {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalPower external_power = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ThirdPartyDeviceOfflineTimeoutPart third_party_device_offline_timeout_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.RadioInterferenceDetectionPart radio_interference_detection_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.IntegrationCompatibilityModePart integration_compatibility_mode_part = 9;
+}

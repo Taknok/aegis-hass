@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_common_capabilities.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message DeviceCommonCapabilitiesPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceCommonCapability device_common_capabilities = 1;
+}

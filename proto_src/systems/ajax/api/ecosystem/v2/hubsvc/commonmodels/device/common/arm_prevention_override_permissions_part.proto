@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ArmPreventionOverridePermissionsPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart.ArmPreventionOverridePermission arm_prevention_override_permissions = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart.Capabilities capabilities = 1000;
+
+  message ArmPreventionOverridePermissionsPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart.ArmPreventionOverridePermission arm_prevention_override_permissions = 1;
+  }
+
+  message ArmPreventionOverridePermission {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart.ArmPreventionOverridePermissions arm_prevention_override_permission = 1;
+    bool is_enabled = 2;
+  }
+
+  enum Capabilities {
+    CAPABILITIES_UNSPECIFIED = 0;
+    CAPABILITIES_ARM_PREVENTION_OVERRIDE_PERMISSIONS = 1;
+  }
+
+  enum ArmPreventionOverridePermissions {
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_UNSPECIFIED = 0;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_OTHER = 1;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_BATTERY_CHARGE = 2;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_HUB_POWERED = 3;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_TAMPERED = 4;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_ACTIVE_CHANNELS = 5;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_CMS_ACTIVE_CHANNELS = 6;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_BOLT_SWITCH_CONTACT = 7;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_DEVICE_IN_ALARM_STATE = 8;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_DEVICE_UNAVAILABLE = 9;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_MASKING_DETECTED = 10;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_INTRUSION_DEVICE_MALFUNCTION = 11;
+    ARM_PREVENTION_OVERRIDE_PERMISSIONS_SIREN_FAULT = 12;
+  }
+}

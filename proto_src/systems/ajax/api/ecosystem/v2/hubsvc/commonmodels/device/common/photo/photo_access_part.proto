@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message PhotoAccessPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.photo.PhotoAccessPart.SomeoneCanMakePhoto someone_can_make_photo = 1;
+
+  enum SomeoneCanMakePhoto {
+    SOMEONE_CAN_MAKE_PHOTO_UNSPECIFIED = 0;
+    SOMEONE_CAN_MAKE_PHOTO_DISABLED = 1;
+    SOMEONE_CAN_MAKE_PHOTO_ENABLED = 2;
+    SOMEONE_CAN_MAKE_PHOTO_HUB_PHOD_DISABLED = 3;
+  }
+}

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice";
+option swift_prefix = "";
+
+message AccessCardProfilePart {
+  string id = 1;
+  string name = 2;
+
+  message AccessCardProfileSettings {
+    string name = 1;
+  }
+}

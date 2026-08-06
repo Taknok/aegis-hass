@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "Hub";
+
+enum AudioFormat {
+  AUDIO_FORMAT_UNSPECIFIED = 0;
+  AUDIO_FORMAT_MP3 = 1;
+  AUDIO_FORMAT_OGG = 2;
+  AUDIO_FORMAT_WAV = 3;
+  AUDIO_FORMAT_AAC = 4;
+  AUDIO_FORMAT_OGG_IN_UDF = 5;
+}
