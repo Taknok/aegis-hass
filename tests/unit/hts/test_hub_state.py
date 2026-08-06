@@ -717,6 +717,9 @@ _CONFIRMED_HTS_TEMPERATURE_SAMPLES: dict[str, tuple[bytes, float]] = {
     "home_siren": (b"\x17", 23.0),
     # #375: 0x1f = 31 °C in August for street siren double deck.
     "street_siren_double_deck": (b"\x1f", 31.0),
+    # #412: 0x1d = 29 ⁰C and 0x1e = 30 ⁰C
+    "motion_cam_outdoor_phod": (b"\x1d", 29.0),
+    "motion_cam_outdoor_phod": (b"\x1e", 30.0),
 }
 
 # Families in the production gate with no recorded byte-level sample. They are
