@@ -187,6 +187,7 @@ HUB_DEVICE_TEMPERATURE_DEVICE_TYPES = frozenset(
         "motion_protect_curtain_outdoor_mini",
         "motion_protect_curtain_outdoor_plus",
         "motion_protect_outdoor",
+        "motion_cam_outdoor_phod",
     }
 )
 

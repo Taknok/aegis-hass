@@ -808,6 +808,7 @@ class TestParseDeviceTemperatureC:
             "motion_protect_curtain_outdoor_plus",
             "motion_protect_curtain_outdoor_base",
             "motion_protect_outdoor",
+            "motion_cam_outdoor_phod",
             "street_siren",
             "street_siren_plus_g3",
             "street_siren_double_deck",
