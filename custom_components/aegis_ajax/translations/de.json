@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "Der Hub hat den Befehl nicht erkannt."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant kann dieses Gerät nicht wieder aktivieren: Die Ajax-Zentrale bietet keinen Befehl zum Aufheben einer Deaktivierung. Aktiviere es in der Ajax-App wieder."
+        },
         "command_failed": {
             "message": "Der Befehl konnte nicht abgeschlossen werden. Der Hub meldete: {reason}."
         }

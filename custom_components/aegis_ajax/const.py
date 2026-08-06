@@ -781,4 +781,6 @@ COMMAND_ERROR_TRANSLATION_KEYS: dict[str, str] = {
     "alarm_reset_needed": "command_alarm_reset_needed",
     "command_not_performed": "command_not_performed",
     "unknown_command": "command_unknown",
+    # Client-side: the bypass command has no "clear" enum value (#338).
+    "bypass_clear_unsupported": "command_bypass_clear_unsupported",
 }

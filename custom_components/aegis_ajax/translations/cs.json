@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "Hub příkaz nerozpoznal."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant nemůže toto zařízení znovu aktivovat: hub Ajax nenabízí žádný příkaz ke zrušení deaktivace. Aktivujte jej znovu v aplikaci Ajax."
+        },
         "command_failed": {
             "message": "Příkaz se nepodařilo dokončit. Hub vrátil: {reason}."
         }

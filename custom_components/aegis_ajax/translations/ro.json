@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "Hub-ul nu a recunoscut comanda."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant nu poate reactiva acest dispozitiv: hubul Ajax nu oferă nicio comandă pentru anularea unei dezactivări. Reactivează-l din aplicația Ajax."
+        },
         "command_failed": {
             "message": "Comanda nu a putut fi finalizată. Hub-ul a returnat: {reason}."
         }

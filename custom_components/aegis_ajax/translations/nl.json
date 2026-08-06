@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "De hub heeft de opdracht niet herkend."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant kan dit apparaat niet opnieuw activeren: de Ajax-hub biedt geen opdracht om een deactivering op te heffen. Activeer het opnieuw via de Ajax-app."
+        },
         "command_failed": {
             "message": "De opdracht kon niet worden voltooid. De hub gaf terug: {reason}."
         }

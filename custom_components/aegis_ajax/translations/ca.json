@@ -505,6 +505,9 @@
         "command_unknown": {
             "message": "El hub no ha reconegut l'ordre."
         },
+        "command_bypass_clear_unsupported": {
+            "message": "Home Assistant no pot reactivar aquest dispositiu: el hub d'Ajax no ofereix cap ordre per treure una desactivació. Reactiva'l des de l'app d'Ajax."
+        },
         "command_failed": {
             "message": "No s'ha pogut completar l'ordre. El hub ha retornat: {reason}."
         }

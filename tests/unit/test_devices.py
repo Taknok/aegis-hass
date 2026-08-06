@@ -2332,37 +2332,44 @@ class TestDeviceBypassCommand:
         )
 
     @pytest.mark.asyncio
-    async def test_disable_sends_unspecified(self) -> None:
-        from v3.mobilegwsvc.commonmodels.response import response_pb2 as common_response_pb2
-        from v3.mobilegwsvc.service.device_command_device_bypass import (
-            endpoint_pb2_grpc,
-            request_pb2,
-            response_pb2,
-        )
+    async def test_disable_raises_without_sending(self) -> None:
+        """Clearing a deactivation must fail locally, not on the wire (#338).
+
+        The `Bypass` enum has no "clear" value — 1..6 are the engineering and
+        one-time kinds. Sending `BYPASS_UNSPECIFIED` (0) as a command value was
+        measured on a reporter's hub to fail with
+        `INVALID_ARGUMENT: Can't get the number of an unknown enum value`, an
+        opaque gRPC error the user cannot act on. Fail before the call with a
+        reason the UI can translate instead.
+        """
+        from v3.mobilegwsvc.service.device_command_device_bypass import endpoint_pb2_grpc
+
+        from custom_components.aegis_ajax.api.devices import DeviceCommandError
 
         api = self._make_api()
         captured: list = []
-        ok = response_pb2.DeviceCommandDeviceBypassResponse(success=common_response_pb2.Success())
 
         class _StubFactory:
             def __init__(self, channel: object) -> None:
                 async def _execute(req: object, **_: object) -> object:
                     captured.append(req)
-                    return ok
+                    return None
 
                 self.execute = AsyncMock(side_effect=_execute)
 
-        with patch.object(endpoint_pb2_grpc, "DeviceCommandDeviceBypassServiceStub", _StubFactory):
+        with (
+            patch.object(endpoint_pb2_grpc, "DeviceCommandDeviceBypassServiceStub", _StubFactory),
+            pytest.raises(DeviceCommandError) as excinfo,
+        ):
             await api.send_command(
                 DeviceCommand.bypass(
                     hub_id="hub-1", device_id="dev-1", device_type="door_protect", enable=False
                 )
             )
 
-        assert (
-            captured[0].bypass_type
-            == request_pb2.DeviceCommandDeviceBypassRequest.BYPASS_UNSPECIFIED
-        )
+        assert excinfo.value.reason == "bypass_clear_unsupported"
+        # Nothing may reach the hub: the value the server rejects is never sent.
+        assert captured == []
 
     @pytest.mark.asyncio
     async def test_bypass_failure_raises(self) -> None:
