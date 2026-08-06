@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.common;
+
+import "systems/ajax/logging/proto/formatting_options.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.common";
+option swift_prefix = "";
+
+message AssociatedMember {
+  oneof associated_member {
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMember.AssociatedSpaceMember associated_space_member = 1;
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMember.AssociatedGuest associated_guest = 2;
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMember.DeletedSpaceMember deleted_space_member = 3;
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMember.NotAssignedMember not_assigned_member = 4;
+  }
+
+  message AssociatedSpaceMember {
+    string space_member_id = 1;
+    string space_member_name = 2;
+    string email = 3;
+    int32 user_index = 4;
+  }
+
+  message AssociatedGuest {
+  }
+
+  message DeletedSpaceMember {
+  }
+
+  message NotAssignedMember {
+  }
+}

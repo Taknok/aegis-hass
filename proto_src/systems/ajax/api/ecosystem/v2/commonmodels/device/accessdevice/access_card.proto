@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/arm_prevention_override_permissions_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/accessdevice/access_card_profile_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/accessdevice/access_card_type_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/common/associated_member_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/common/day_alarm_deactivation_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/accessdevice/access_device_state_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/accessdevice/access_device_security_part.proto";
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/common/device_index_part.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice";
+option swift_prefix = "";
+
+message AccessCard {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessCardProfilePart profile_part = 1;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart associated_member_part = 2;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.DayAlarmDeactivationPart day_alarm_deactivation_part = 3;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceStatePart access_device_state_part = 4;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessDeviceSecurityPart access_device_security_part = 5;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.DeviceIndexPart device_index_part = 6;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.accessdevice.AccessCardTypePart type_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 8;
+}

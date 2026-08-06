@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_event_type.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_event_locator.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceAlarmsPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAlarmsPart.Alarm alarms = 1;
+
+  message Alarm {
+    int32 index = 1;
+    bool enabled = 2;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventType event_type = 3;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator event_locator = 4;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAlarmsPart.Alarm.OperatingMode operating_mode = 5;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAlarmsPart.Alarm.State state = 6;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAlarmsPart.Alarm.Capability capabilities = 7;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventType available_event_types = 100;
+
+    message AlarmSettings {
+      int32 index = 1;
+      optional bool enabled = 2;
+      optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventType event_type = 3;
+      optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAlarmsPart.Alarm.OperatingMode operating_mode = 4;
+      optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceEventLocator.ThirdPartyDeviceEventLocatorSettings event_locator = 5;
+    }
+
+    enum Capability {
+      CAPABILITY_UNSPECIFIED = 0;
+      CAPABILITY_LAST_ENABLED_ALARM_USED_IN_SCENARIOS = 1;
+      CAPABILITY_EVENT_LOCATOR_SELECTION_AVAILABLE = 2;
+      CAPABILITY_OPERATING_MODE_SELECTION_AVAILABLE = 3;
+    }
+
+    enum OperatingMode {
+      OPERATING_MODE_UNSPECIFIED = 0;
+      OPERATING_MODE_BISTABLE = 1;
+      OPERATING_MODE_IMPULSE = 2;
+    }
+
+    enum State {
+      STATE_UNSPECIFIED = 0;
+      STATE_LOWERED = 1;
+      STATE_RAISED = 2;
+    }
+  }
+
+  message ThirdPartyDeviceAlarmsPartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAlarmsPart.Alarm.AlarmSettings alarms = 1;
+  }
+}

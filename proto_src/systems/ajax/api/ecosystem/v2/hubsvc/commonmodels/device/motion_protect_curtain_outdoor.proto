@@ -18,23 +18,43 @@ import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/motion_d
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_warnings.proto";
 import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
 
-option swift_prefix = "";
-option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
 option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message MotionProtectCurtain {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
+}
+
+message MotionProtectCurtainBase {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
+}
+
+message MotionProtectCurtainOutdoorBase {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
+}
 
 message MotionProtectCurtainOutdoorMini {
-  v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
-  common.DeviceTemperature device_temperature = 2;
-  common.MotionDetectionPart motion_detection_part = 3;
-  common.DeviceTamperStatus device_tamper_status = 4[(proto.meta.field_tag) = "tampered"];
-  common.SirenTriggers siren_triggers = 5;
-  common.CommonJewellerPart common_jeweller_part = 6;
-  common.CommonWingsPart common_wings_part = 7;
-  common.CommonMaskingPart common_masking_part = 8;
-  common.Gyroscope gyroscope = 9;
-  common.CommonDeviceNotificationsPart device_notifications_part = 10;
-  common.LedIndicationPart led_indication_part = 11;
-  common.DetectionModePart detection_mode_part = 12;
-  common.DeviceBatteryWithoutCharging device_battery_without_charging_part = 13;
-  common.DeviceWarnings device_warnings = 14;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTemperature device_temperature = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MotionDetectionPart motion_detection_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonMaskingPart common_masking_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Gyroscope gyroscope = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonDeviceNotificationsPart device_notifications_part = 10;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 11;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectionModePart detection_mode_part = 12;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging_part = 13;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceWarnings device_warnings = 14;
+}
+
+message MotionProtectCurtainOutdoorPlus {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
+}
+
+message DualCurtainOutdoor {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.CommonArmingPart common_arming_part = 1;
 }

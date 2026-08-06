@@ -23,12 +23,72 @@ import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias as _TypeAlias
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    from typing_extensions import TypeAlias as _TypeAlias
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
+
+@_typing.final
+class MotionProtectCurtain(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectCurtain: _TypeAlias = MotionProtectCurtain  # noqa: Y015
+
+@_typing.final
+class MotionProtectCurtainBase(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectCurtainBase: _TypeAlias = MotionProtectCurtainBase  # noqa: Y015
+
+@_typing.final
+class MotionProtectCurtainOutdoorBase(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectCurtainOutdoorBase: _TypeAlias = MotionProtectCurtainOutdoorBase  # noqa: Y015
 
 @_typing.final
 class MotionProtectCurtainOutdoorMini(_message.Message):
@@ -97,5 +157,46 @@ class MotionProtectCurtainOutdoorMini(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "detection_mode_part", b"detection_mode_part", "device_battery_without_charging_part", b"device_battery_without_charging_part", "device_notifications_part", b"device_notifications_part", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "gyroscope", b"gyroscope", "led_indication_part", b"led_indication_part", "motion_detection_part", b"motion_detection_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MotionProtectCurtainOutdoorMini: _TypeAlias = MotionProtectCurtainOutdoorMini  # noqa: Y015
+
+@_typing.final
+class MotionProtectCurtainOutdoorPlus(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectCurtainOutdoorPlus: _TypeAlias = MotionProtectCurtainOutdoorPlus  # noqa: Y015
+
+@_typing.final
+class DualCurtainOutdoor(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___DualCurtainOutdoor: _TypeAlias = DualCurtainOutdoor  # noqa: Y015

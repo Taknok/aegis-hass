@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device";
+option swift_prefix = "";
+
+message ZWaveDeviceClustersPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device.ZWaveDeviceClustersPart.Cluster clusters = 1;
+
+  message Cluster {
+    string object_id = 1;
+    oneof kind {
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device.ZWaveDeviceClustersPart.Cluster.Basic basic = 3;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device.ZWaveDeviceClustersPart.Cluster.OnOff on_off = 4;
+      .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.z_wave_device.ZWaveDeviceClustersPart.Cluster.ElectricalMeasurement electrical_measurement = 5;
+    }
+
+    message Basic {
+    }
+
+    message OnOff {
+    }
+
+    message ElectricalMeasurement {
+    }
+  }
+}

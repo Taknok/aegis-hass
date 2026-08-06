@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/masking_sensitivity.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ReedContactPart {
+  bool opening_sensor_enabled = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.OpeningSensorStatus opening_sensor_status = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.MagneticMasking magnetic_masking = 3;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.Capability capabilities = 4;
+
+  message ReedContactPartSettings {
+    optional bool opening_sensor_enabled = 1;
+    optional bool antimasking = 2;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MaskingSensitivity masking_sensitivity = 3;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.MagneticMasking.DetectMasking detect_masking = 4;
+  }
+
+  message MagneticMasking {
+    bool magnetic_antimasking = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.MagneticMasking.IsMaskedStatus is_masked_status = 2;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MaskingSensitivity masking_sensitivity = 3;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.MagneticMasking.DetectMasking detect_masking = 4;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ReedContactPart.MagneticMasking.DetectMasking detect_masking_capabilities = 5;
+
+    enum DetectMasking {
+      DETECT_MASKING_UNSPECIFIED = 0;
+      DETECT_MASKING_ALWAYS = 1;
+      DETECT_MASKING_WHEN_ARMED = 2;
+    }
+
+    enum IsMaskedStatus {
+      IS_MASKED_STATUS_UNSPECIFIED = 0;
+      IS_MASKED_STATUS_OFF = 1;
+      IS_MASKED_STATUS_ON = 2;
+      IS_MASKED_STATUS_ALERT = 3;
+    }
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_MAGNETIC_MASKING = 1;
+  }
+
+  enum OpeningSensorStatus {
+    OPENING_SENSOR_STATUS_UNSPECIFIED = 0;
+    OPENING_SENSOR_STATUS_OPEN = 1;
+    OPENING_SENSOR_STATUS_CLOSED = 2;
+    OPENING_SENSOR_STATUS_DISABLED = 3;
+  }
+}

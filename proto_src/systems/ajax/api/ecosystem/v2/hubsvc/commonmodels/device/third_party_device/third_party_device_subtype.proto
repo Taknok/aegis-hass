@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+enum ThirdPartyDeviceSubtype {
+  THIRD_PARTY_DEVICE_SUBTYPE_UNSPECIFIED = 0;
+  THIRD_PARTY_DEVICE_SUBTYPE_IQ = 1;
+  THIRD_PARTY_DEVICE_SUBTYPE_OTHER = 2;
+}

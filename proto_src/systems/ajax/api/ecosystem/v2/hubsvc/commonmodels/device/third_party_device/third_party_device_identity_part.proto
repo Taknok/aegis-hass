@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/third_party_device_type.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_id.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceIdentityPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.ThirdPartyDeviceType third_party_device_type = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceId third_party_device_id = 2;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.ThirdPartyDeviceType available_third_party_device_types = 100;
+
+  message ThirdPartyDeviceIdentityPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.ThirdPartyDeviceType third_party_device_type = 1;
+  }
+}

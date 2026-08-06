@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender";
+option swift_prefix = "Hub";
+
+message MainChannelConnectionPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender.MainChannelConnectionPart.MainChannelConnectionStatus main_channel_connection_status = 1;
+
+  enum MainChannelConnectionStatus {
+    MAIN_CHANNEL_CONNECTION_STATUS_UNSPECIFIED = 0;
+    MAIN_CHANNEL_CONNECTION_STATUS_OFFLINE = 1;
+    MAIN_CHANNEL_CONNECTION_STATUS_ONLINE = 2;
+  }
+}

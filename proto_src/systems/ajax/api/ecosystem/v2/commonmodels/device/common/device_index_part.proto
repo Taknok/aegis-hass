@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.common";
+option swift_prefix = "";
+
+message DeviceIndexPart {
+  int32 device_index = 1;
+  repeated .systems.ajax.api.ecosystem.v2.commonmodels.device.common.DeviceIndexPart.DeviceIndexCapability device_index_capabilities = 2;
+
+  enum DeviceIndexCapability {
+    DEVICE_INDEX_CAPABILITY_UNSPECIFIED = 0;
+    DEVICE_INDEX_CAPABILITY_AVAILABLE = 1;
+  }
+}

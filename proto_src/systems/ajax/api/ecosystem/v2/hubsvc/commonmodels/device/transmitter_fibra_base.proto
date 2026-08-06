@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_fibra_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_siren_triggers.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_tamper_status.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/detectors_power_line_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/two_tamper_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message TransmitterFibra8Channels {
+  reserved 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonFibraPart common_fibra_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.TwoTamperPart two_tamper_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart detectors_power_line_part = 5;
+}
+
+message TransmitterFibra8ChannelsInwall {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonFibraPart common_fibra_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.SirenTriggers siren_triggers = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart detectors_power_line_part = 4;
+}

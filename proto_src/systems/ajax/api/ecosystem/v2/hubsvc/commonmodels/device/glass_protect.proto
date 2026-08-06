@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_chimes.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message GlassProtect {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceChimes device_chimes = 1;
+}
+
+message GlassProtectS {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceChimes device_chimes = 1;
+}
+
+message GlassProtectFibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceChimes device_chimes = 1;
+}

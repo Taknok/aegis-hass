@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message MaskingSensitivity {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MaskingSensitivity.Sensitivity sensitivity = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MaskingSensitivity.Sensitivity available_sensitivities = 2;
+
+  message MaskingSensitivitySettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MaskingSensitivity.Sensitivity sensitivity = 1;
+  }
+
+  enum Sensitivity {
+    SENSITIVITY_UNSPECIFIED = 0;
+    SENSITIVITY_LOW = 1;
+    SENSITIVITY_NORMAL = 2;
+    SENSITIVITY_HIGH = 3;
+  }
+}

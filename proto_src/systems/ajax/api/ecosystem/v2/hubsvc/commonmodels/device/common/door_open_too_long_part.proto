@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "google/protobuf/duration.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message DoorOpenTooLongEventSettingsPart {
+  .google.protobuf.Duration seconds = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DoorOpenTooLongEventSettingsPart.Capability capabilities = 2;
+
+  message DoorOpenTooLongPartSettings {
+    optional .google.protobuf.Duration seconds = 1;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_DOOR_OPEN_TOO_LONG = 1;
+  }
+}

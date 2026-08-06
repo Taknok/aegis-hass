@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/takeover_module_compatibility_mode.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message IntegrationCompatibilityModePart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.TakeoverModuleCompatibilityMode compatibility_mode = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.TakeoverModuleCompatibilityMode available_compatibility_modes = 2;
+
+  message IntegrationCompatibilityModePartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.TakeoverModuleCompatibilityMode compatibility_mode = 2;
+  }
+}

@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_jeweller_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_wings_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_fire_zone_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_location_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_battery.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_tamper_status.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_standard_compliance_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/external_antennas_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/external_power.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/jeweller_communication_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/malfunction_badge_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/ethernet_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/rangeextender/main_channel_connection.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/led_indication_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/hopping_part.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message RangeExtender2 {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBattery device_battery_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalPower external_power_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart malfunction_badge_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender.MainChannelConnectionPart main_channel_connection_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.EthernetPart ethernet_part = 8;
+}
+
+message RangeExtender2Fire {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalPower external_power_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart malfunction_badge_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender.MainChannelConnectionPart main_channel_connection_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.EthernetPart ethernet_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceFireZonePart device_fire_zone_part = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceLocationPart device_location_part = 10;
+}
+
+message RangeExtender2S {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBattery device_battery = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalPower external_power_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.JewellerCommunicationPart jeweller_communication_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart malfunction_badge_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender.MainChannelConnectionPart main_channel_connection_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.EthernetPart ethernet_part = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonStandardCompliancePart common_standard_compliance_part = 10;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalAntennasPart external_antennas_part = 11;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.LedIndicationPart led_indication_part = 12;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.HoppingPart hopping_part = 13;
+}
+
+message RangeExtender2Type4 {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonWingsPart common_wings_part = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceBatteryWithoutCharging device_battery_without_charging_part = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceTamperStatus device_tamper_status = 4;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalPower external_power_part = 5;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.MalfunctionBadgePart malfunction_badge_part = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.rangeextender.MainChannelConnectionPart main_channel_connection_part = 7;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.EthernetPart ethernet_part = 8;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceFireZonePart device_fire_zone_part = 9;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceLocationPart device_location_part = 10;
+}

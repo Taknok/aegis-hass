@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.common";
+option swift_prefix = "";
+
+message DayAlarmDeactivationPart {
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.DayAlarmDeactivationPart.DayAlarmDeactivation day_alarm_deactivation = 1;
+  repeated .systems.ajax.api.ecosystem.v2.commonmodels.device.common.DayAlarmDeactivationPart.DayAlarmDeactivationCapability day_alarm_deactivation_capabilities = 2;
+
+  message DayAlarmDeactivationSettings {
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.DayAlarmDeactivationPart.DayAlarmDeactivation day_alarm_deactivation = 1;
+  }
+
+  enum DayAlarmDeactivationCapability {
+    DAY_ALARM_DEACTIVATION_CAPABILITY_UNSPECIFIED = 0;
+    DAY_ALARM_DEACTIVATION_CAPABILITY_AVAILABLE = 1;
+  }
+
+  enum DayAlarmDeactivation {
+    DAY_ALARM_DEACTIVATION_UNSPECIFIED = 0;
+    DAY_ALARM_DEACTIVATION_NO_ACCESS = 1;
+    DAY_ALARM_DEACTIVATION_TEMPORARY = 2;
+    DAY_ALARM_DEACTIVATION_PERMANENT = 3;
+  }
+}

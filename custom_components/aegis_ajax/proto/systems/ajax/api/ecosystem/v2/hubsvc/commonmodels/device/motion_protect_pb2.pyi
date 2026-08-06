@@ -15,18 +15,18 @@ from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import devi
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_siren_triggers_pb2 as _device_siren_triggers_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_tamper_status_pb2 as _device_tamper_status_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_temperature_pb2 as _device_temperature_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import device_warnings_pb2 as _device_warnings_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import fast_tamper_part_pb2 as _fast_tamper_part_pb2
-from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import light_indication_pb2 as _light_indication_pb2
+from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import led_indication_part_pb2 as _led_indication_part_pb2
 from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import motion_detection_part_pb2 as _motion_detection_part_pb2
-from systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common import sensitivity_part_pb2 as _sensitivity_part_pb2
 import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias as _TypeAlias
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    from typing_extensions import TypeAlias as _TypeAlias
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -54,6 +54,7 @@ class MotionProtect(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["common_jeweller_part", b"common_jeweller_part", "common_motion_protect_part", b"common_motion_protect_part", "device_battery", b"device_battery"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MotionProtect: _TypeAlias = MotionProtect  # noqa: Y015
 
@@ -85,6 +86,7 @@ class MotionProtectS(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["common_jeweller_part", b"common_jeweller_part", "common_motion_protect_part", b"common_motion_protect_part", "device_battery", b"device_battery", "fast_tamper_part", b"fast_tamper_part"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MotionProtectS: _TypeAlias = MotionProtectS  # noqa: Y015
 
@@ -95,7 +97,6 @@ class MotionProtectG3(_message.Message):
     COMMON_JEWELLER_PART_FIELD_NUMBER: _builtins.int
     COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
     DEVICE_TEMPERATURE_FIELD_NUMBER: _builtins.int
-    SENSITIVITY_PART_FIELD_NUMBER: _builtins.int
     DEVICE_TAMPER_STATUS_FIELD_NUMBER: _builtins.int
     SIREN_TRIGGERS_FIELD_NUMBER: _builtins.int
     MOTION_DETECTION_PART_FIELD_NUMBER: _builtins.int
@@ -103,7 +104,8 @@ class MotionProtectG3(_message.Message):
     COMMON_WINGS_PART_FIELD_NUMBER: _builtins.int
     COMMON_MASKING_PART_FIELD_NUMBER: _builtins.int
     BRACKET_STATE_PART_FIELD_NUMBER: _builtins.int
-    LIGHT_INDICATION_FIELD_NUMBER: _builtins.int
+    LED_INDICATION_PART_FIELD_NUMBER: _builtins.int
+    DEVICE_WARNINGS_FIELD_NUMBER: _builtins.int
     device_tamper_status: _device_tamper_status_pb2.DeviceTamperStatus.ValueType
     @_builtins.property
     def common_jeweller_part(self) -> _common_jeweller_part_pb2.CommonJewellerPart: ...
@@ -111,8 +113,6 @@ class MotionProtectG3(_message.Message):
     def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
     @_builtins.property
     def device_temperature(self) -> _device_temperature_pb2.DeviceTemperature: ...
-    @_builtins.property
-    def sensitivity_part(self) -> _sensitivity_part_pb2.SensitivityPart: ...
     @_builtins.property
     def siren_triggers(self) -> _device_siren_triggers_pb2.SirenTriggers: ...
     @_builtins.property
@@ -126,14 +126,15 @@ class MotionProtectG3(_message.Message):
     @_builtins.property
     def bracket_state_part(self) -> _bracket_state_pb2.BracketStatePart: ...
     @_builtins.property
-    def light_indication(self) -> _light_indication_pb2.LightIndication: ...
+    def led_indication_part(self) -> _led_indication_part_pb2.LedIndicationPart: ...
+    @_builtins.property
+    def device_warnings(self) -> _device_warnings_pb2.DeviceWarnings: ...
     def __init__(
         self,
         *,
         common_jeweller_part: _common_jeweller_part_pb2.CommonJewellerPart | None = ...,
         common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
         device_temperature: _device_temperature_pb2.DeviceTemperature | None = ...,
-        sensitivity_part: _sensitivity_part_pb2.SensitivityPart | None = ...,
         device_tamper_status: _device_tamper_status_pb2.DeviceTamperStatus.ValueType = ...,
         siren_triggers: _device_siren_triggers_pb2.SirenTriggers | None = ...,
         motion_detection_part: _motion_detection_part_pb2.MotionDetectionPart | None = ...,
@@ -141,12 +142,14 @@ class MotionProtectG3(_message.Message):
         common_wings_part: _common_wings_part_pb2.CommonWingsPart | None = ...,
         common_masking_part: _common_masking_part_pb2.CommonMaskingPart | None = ...,
         bracket_state_part: _bracket_state_pb2.BracketStatePart | None = ...,
-        light_indication: _light_indication_pb2.LightIndication | None = ...,
+        led_indication_part: _led_indication_part_pb2.LedIndicationPart | None = ...,
+        device_warnings: _device_warnings_pb2.DeviceWarnings | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_temperature", b"device_temperature", "light_indication", b"light_indication", "motion_detection_part", b"motion_detection_part", "sensitivity_part", b"sensitivity_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "led_indication_part", b"led_indication_part", "motion_detection_part", b"motion_detection_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "light_indication", b"light_indication", "motion_detection_part", b"motion_detection_part", "sensitivity_part", b"sensitivity_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "led_indication_part", b"led_indication_part", "motion_detection_part", b"motion_detection_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MotionProtectG3: _TypeAlias = MotionProtectG3  # noqa: Y015
 
@@ -157,7 +160,6 @@ class MotionProtectPlusG3(_message.Message):
     COMMON_JEWELLER_PART_FIELD_NUMBER: _builtins.int
     COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
     DEVICE_TEMPERATURE_FIELD_NUMBER: _builtins.int
-    SENSITIVITY_PART_FIELD_NUMBER: _builtins.int
     DEVICE_TAMPER_STATUS_FIELD_NUMBER: _builtins.int
     SIREN_TRIGGERS_FIELD_NUMBER: _builtins.int
     MOTION_DETECTION_PART_FIELD_NUMBER: _builtins.int
@@ -165,7 +167,8 @@ class MotionProtectPlusG3(_message.Message):
     COMMON_WINGS_PART_FIELD_NUMBER: _builtins.int
     COMMON_MASKING_PART_FIELD_NUMBER: _builtins.int
     BRACKET_STATE_PART_FIELD_NUMBER: _builtins.int
-    LIGHT_INDICATION_FIELD_NUMBER: _builtins.int
+    LED_INDICATION_PART_FIELD_NUMBER: _builtins.int
+    DEVICE_WARNINGS_FIELD_NUMBER: _builtins.int
     device_tamper_status: _device_tamper_status_pb2.DeviceTamperStatus.ValueType
     @_builtins.property
     def common_jeweller_part(self) -> _common_jeweller_part_pb2.CommonJewellerPart: ...
@@ -173,8 +176,6 @@ class MotionProtectPlusG3(_message.Message):
     def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
     @_builtins.property
     def device_temperature(self) -> _device_temperature_pb2.DeviceTemperature: ...
-    @_builtins.property
-    def sensitivity_part(self) -> _sensitivity_part_pb2.SensitivityPart: ...
     @_builtins.property
     def siren_triggers(self) -> _device_siren_triggers_pb2.SirenTriggers: ...
     @_builtins.property
@@ -188,14 +189,15 @@ class MotionProtectPlusG3(_message.Message):
     @_builtins.property
     def bracket_state_part(self) -> _bracket_state_pb2.BracketStatePart: ...
     @_builtins.property
-    def light_indication(self) -> _light_indication_pb2.LightIndication: ...
+    def led_indication_part(self) -> _led_indication_part_pb2.LedIndicationPart: ...
+    @_builtins.property
+    def device_warnings(self) -> _device_warnings_pb2.DeviceWarnings: ...
     def __init__(
         self,
         *,
         common_jeweller_part: _common_jeweller_part_pb2.CommonJewellerPart | None = ...,
         common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
         device_temperature: _device_temperature_pb2.DeviceTemperature | None = ...,
-        sensitivity_part: _sensitivity_part_pb2.SensitivityPart | None = ...,
         device_tamper_status: _device_tamper_status_pb2.DeviceTamperStatus.ValueType = ...,
         siren_triggers: _device_siren_triggers_pb2.SirenTriggers | None = ...,
         motion_detection_part: _motion_detection_part_pb2.MotionDetectionPart | None = ...,
@@ -203,11 +205,153 @@ class MotionProtectPlusG3(_message.Message):
         common_wings_part: _common_wings_part_pb2.CommonWingsPart | None = ...,
         common_masking_part: _common_masking_part_pb2.CommonMaskingPart | None = ...,
         bracket_state_part: _bracket_state_pb2.BracketStatePart | None = ...,
-        light_indication: _light_indication_pb2.LightIndication | None = ...,
+        led_indication_part: _led_indication_part_pb2.LedIndicationPart | None = ...,
+        device_warnings: _device_warnings_pb2.DeviceWarnings | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_temperature", b"device_temperature", "light_indication", b"light_indication", "motion_detection_part", b"motion_detection_part", "sensitivity_part", b"sensitivity_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "led_indication_part", b"led_indication_part", "motion_detection_part", b"motion_detection_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "light_indication", b"light_indication", "motion_detection_part", b"motion_detection_part", "sensitivity_part", b"sensitivity_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["bracket_state_part", b"bracket_state_part", "common_arming_part", b"common_arming_part", "common_jeweller_part", b"common_jeweller_part", "common_masking_part", b"common_masking_part", "common_wings_part", b"common_wings_part", "device_battery", b"device_battery", "device_tamper_status", b"device_tamper_status", "device_temperature", b"device_temperature", "device_warnings", b"device_warnings", "led_indication_part", b"led_indication_part", "motion_detection_part", b"motion_detection_part", "siren_triggers", b"siren_triggers"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MotionProtectPlusG3: _TypeAlias = MotionProtectPlusG3  # noqa: Y015
+
+@_typing.final
+class MotionProtectFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectFibra: _TypeAlias = MotionProtectFibra  # noqa: Y015
+
+@_typing.final
+class MotionProtectG3Fibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectG3Fibra: _TypeAlias = MotionProtectG3Fibra  # noqa: Y015
+
+@_typing.final
+class MotionProtectG3FibraNew(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectG3FibraNew: _TypeAlias = MotionProtectG3FibraNew  # noqa: Y015
+
+@_typing.final
+class MotionProtectOutdoor(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectOutdoor: _TypeAlias = MotionProtectOutdoor  # noqa: Y015
+
+@_typing.final
+class MotionProtectPlus(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectPlus: _TypeAlias = MotionProtectPlus  # noqa: Y015
+
+@_typing.final
+class MotionProtectPlusFibra(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectPlusFibra: _TypeAlias = MotionProtectPlusFibra  # noqa: Y015
+
+@_typing.final
+class MotionProtectSPlus(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    COMMON_ARMING_PART_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def common_arming_part(self) -> _common_arming_part_pb2.CommonArmingPart: ...
+    def __init__(
+        self,
+        *,
+        common_arming_part: _common_arming_part_pb2.CommonArmingPart | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["common_arming_part", b"common_arming_part"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MotionProtectSPlus: _TypeAlias = MotionProtectSPlus  # noqa: Y015

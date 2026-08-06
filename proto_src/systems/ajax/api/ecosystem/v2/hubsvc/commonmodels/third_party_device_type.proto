@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels";
+option swift_prefix = "CommonHub";
+
+enum ThirdPartyDeviceType {
+  THIRD_PARTY_DEVICE_TYPE_UNSPECIFIED = 0;
+  THIRD_PARTY_DEVICE_TYPE_OPENING_DETECTOR = 1;
+  THIRD_PARTY_DEVICE_TYPE_TILT_DETECTOR = 2;
+  THIRD_PARTY_DEVICE_TYPE_MOTION_DETECTOR = 3;
+  THIRD_PARTY_DEVICE_TYPE_GLASS_BREAK_DETECTOR = 4;
+  THIRD_PARTY_DEVICE_TYPE_SHOCK_DETECTOR = 5;
+  THIRD_PARTY_DEVICE_TYPE_CO_DETECTOR = 6;
+  THIRD_PARTY_DEVICE_TYPE_SMOKE_DETECTOR = 7;
+  THIRD_PARTY_DEVICE_TYPE_HEAT_DETECTOR = 8;
+  THIRD_PARTY_DEVICE_TYPE_FREEZE_DETECTOR = 9;
+  THIRD_PARTY_DEVICE_TYPE_FLOOD_DETECTOR = 10;
+  THIRD_PARTY_DEVICE_TYPE_KEYFOB = 11;
+  THIRD_PARTY_DEVICE_TYPE_CUSTOM = 12;
+  THIRD_PARTY_DEVICE_TYPE_FIRE_DETECTOR = 13;
+}

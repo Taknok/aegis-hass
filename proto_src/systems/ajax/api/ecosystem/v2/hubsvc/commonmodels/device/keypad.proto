@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/arm_prevention_override_permissions_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_jeweller_part.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/common_fibra_part.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message Keypad {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadFibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonFibraPart common_fibra_part = 2;
+}
+
+message KeypadCombi {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadPlus {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadPlusG3 {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadSPlus {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadBeep {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+}
+
+message KeypadOutdoor {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadOutdoorFibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonFibraPart common_fibra_part = 2;
+}
+
+message KeypadTouch {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}
+
+message KeypadTouchFibra {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonFibraPart common_fibra_part = 2;
+}
+
+message KeypadTouchG3 {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.CommonJewellerPart common_jeweller_part = 2;
+}

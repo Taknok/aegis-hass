@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/device_malfunctions.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message DeviceMalfunctionsPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DeviceMalfunctions device_malfunctions = 1;
+}

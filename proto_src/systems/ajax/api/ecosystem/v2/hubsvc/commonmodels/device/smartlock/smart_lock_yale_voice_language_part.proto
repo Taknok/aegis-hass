@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.smartlock;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/language.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.smartlock";
+option swift_prefix = "";
+
+message SmartLockYaleVoiceLanguagePart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Language language = 1;
+  optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.smartlock.SmartLockYaleVoiceLanguagePart.SmartLockYaleVoiceLanguagePartWarning warning = 2;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.smartlock.SmartLockYaleVoiceLanguagePart.SmartLockYaleVoiceLanguagePartCapability language_capabilities = 3;
+
+  message SmartLockYaleVoiceLanguagePartCapability {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Language language = 1;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.smartlock.SmartLockYaleVoiceLanguagePart.SmartLockYaleVoiceLanguagePartCapabilityWarning warning = 2;
+  }
+
+  message SmartLockYaleVoiceLanguagePartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.Language language = 1;
+  }
+
+  enum SmartLockYaleVoiceLanguagePartWarning {
+    SMART_LOCK_YALE_VOICE_LANGUAGE_PART_WARNING_UNSPECIFIED = 0;
+    SMART_LOCK_YALE_VOICE_LANGUAGE_PART_WARNING_LANGUAGE_MAY_NOT_BE_SUPPORTED = 1;
+  }
+
+  enum SmartLockYaleVoiceLanguagePartCapabilityWarning {
+    SMART_LOCK_YALE_VOICE_LANGUAGE_PART_CAPABILITY_WARNING_UNSPECIFIED = 0;
+    SMART_LOCK_YALE_VOICE_LANGUAGE_PART_CAPABILITY_WARNING_ALL_SMART_LOCKS = 1;
+    SMART_LOCK_YALE_VOICE_LANGUAGE_PART_CAPABILITY_WARNING_SCANDINAVIAN_SMART_LOCKS_ONLY = 2;
+    SMART_LOCK_YALE_VOICE_LANGUAGE_PART_CAPABILITY_WARNING_FINISH_SMART_LOCKS_ONLY = 3;
+  }
+}

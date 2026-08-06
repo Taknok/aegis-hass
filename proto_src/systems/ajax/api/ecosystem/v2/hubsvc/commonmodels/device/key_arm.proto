@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/common/arm_prevention_override_permissions_part.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device";
+option swift_prefix = "";
+
+message KeyArm {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ArmPreventionOverridePermissionsPart arm_prevention_override_permissions_part = 1;
+}

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceNumberOfButtonsPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceNumberOfButtonsPart.NumberOfButtons number_of_buttons = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceNumberOfButtonsPart.NumberOfButtons available_numbers_of_buttons = 100;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceNumberOfButtonsPart.Capability capabilities = 101;
+
+  message ThirdPartyDeviceNumberOfButtonsPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceNumberOfButtonsPart.NumberOfButtons number_of_buttons = 1;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_NUMBER_OF_BUTTONS = 1;
+  }
+
+  enum NumberOfButtons {
+    NUMBER_OF_BUTTONS_UNSPECIFIED = 0;
+    NUMBER_OF_BUTTONS_ONE = 1;
+    NUMBER_OF_BUTTONS_TWO = 2;
+    NUMBER_OF_BUTTONS_FOUR = 3;
+  }
+}

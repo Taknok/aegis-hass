@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ExternalAntennasPart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalAntennasPart.ExternalAntenna external_antennas = 1;
+
+  message ExternalAntenna {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalAntennasPart.AntennaType antenna_type = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExternalAntennasPart.AntennaStatus antenna_status = 2;
+  }
+
+  enum AntennaType {
+    ANTENNA_TYPE_UNSPECIFIED = 0;
+    ANTENNA_TYPE_JEWELLER = 1;
+    ANTENNA_TYPE_WINGS = 2;
+  }
+
+  enum AntennaStatus {
+    ANTENNA_STATUS_UNSPECIFIED = 0;
+    ANTENNA_STATUS_CONNECTED = 1;
+    ANTENNA_STATUS_DISCONNECTED = 2;
+    ANTENNA_STATUS_DAMAGED = 3;
+  }
+}

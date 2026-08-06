@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/commonmodels/device/common/associated_member.proto";
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.commonmodels.device.common";
+option swift_prefix = "";
+
+message AssociatedMemberPart {
+  reserved 2;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMember associated_member = 1;
+  .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart.NotAssignedUserType not_assigned_user_type = 3;
+  repeated .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart.Capability capabilities = 100;
+
+  message AssociatedMemberSettings {
+    .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart.AssociatedMemberSettings.AssociatedMember associated_member = 1;
+
+    message AssociatedMember {
+      oneof associated_member {
+        .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart.AssociatedMemberSettings.AssociatedMember.AssociatedSpaceMember associated_space_member = 1;
+        .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart.AssociatedMemberSettings.AssociatedMember.AssociatedGuest associated_guest = 2;
+        .systems.ajax.api.ecosystem.v2.commonmodels.device.common.AssociatedMemberPart.AssociatedMemberSettings.AssociatedMember.NotAssignedMember not_assigned_member = 3;
+      }
+
+      message AssociatedSpaceMember {
+        string space_member_id = 1;
+      }
+
+      message AssociatedGuest {
+      }
+
+      message NotAssignedMember {
+      }
+    }
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_ASSOCIATED_MEMBER = 1;
+  }
+
+  enum NotAssignedUserType {
+    NOT_ASSIGNED_USER_TYPE_UNSPECIFIED = 0;
+    NOT_ASSIGNED_USER_TYPE_GUEST = 1;
+    NOT_ASSIGNED_USER_TYPE_NOT_ASSIGNED = 2;
+  }
+}

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ExtraContactSensorPart {
+  reserved 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExtraContactSensorPart.ExtraContactStatus extra_contact_status = 1;
+  bool enabled = 3;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExtraContactSensorPart.ExtraContactType extra_contact_type = 4;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExtraContactSensorPart.ExtraContactType extra_contact_types_capabilities = 5;
+  int32 time_before_alarm_seconds = 6;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExtraContactSensorPart.TimeBeforeAlarmRange time_before_alarm_range = 7;
+  int32 impulse_before_alarm = 8;
+  repeated int32 available_impulse_before_alarm_values = 9;
+
+  message TimeBeforeAlarmRange {
+    int32 start_value_seconds = 1;
+    int32 end_value_seconds = 2;
+    int32 step_seconds = 3;
+  }
+
+  message ExtraContactSensorSettings {
+    optional bool enabled = 1;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ExtraContactSensorPart.ExtraContactType extra_contact_type = 2;
+    optional int32 time_before_alarm_seconds = 3;
+    optional int32 impulse_before_alarm = 4;
+  }
+
+  enum ExtraContactStatus {
+    EXTRA_CONTACT_STATUS_UNSPECIFIED = 0;
+    EXTRA_CONTACT_STATUS_OPENED = 1;
+    EXTRA_CONTACT_STATUS_CLOSED = 2;
+    EXTRA_CONTACT_STATUS_DISABLED = 3;
+    EXTRA_CONTACT_STATUS_CONNECTED = 4;
+    EXTRA_CONTACT_STATUS_ALERT = 5;
+  }
+
+  enum ExtraContactType {
+    EXTRA_CONTACT_TYPE_UNSPECIFIED = 0;
+    EXTRA_CONTACT_TYPE_EXTERNAL_CONTACT = 1;
+    EXTRA_CONTACT_TYPE_ROLLER_SHUTTER = 2;
+  }
+}

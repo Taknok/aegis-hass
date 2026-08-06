@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/device/third_party_device/third_party_device_id_format.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device";
+option swift_prefix = "";
+
+message ThirdPartyDeviceAdditionalIdPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceIdFormat additional_id_format = 1;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.AdditionalId additional_id_1 = 2;
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.AdditionalId additional_id_2 = 3;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.AdditionalId.Relation supported_relations = 4;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.Capability capabilities = 100;
+
+  message AdditionalId {
+    bool enabled = 1;
+    string value = 2;
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.AdditionalId.Relation active_relations = 3;
+
+    message AdditionalIdSettings {
+      bool enabled = 1;
+      string value = 2;
+    }
+
+    enum Relation {
+      RELATION_UNSPECIFIED = 0;
+      RELATION_ALARM = 1;
+      RELATION_EXTERNAL_CONTACT = 2;
+    }
+  }
+
+  message ThirdPartyDeviceAdditionalIdPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.AdditionalId.AdditionalIdSettings additional_id_1 = 1;
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.third_party_device.ThirdPartyDeviceAdditionalIdPart.AdditionalId.AdditionalIdSettings additional_id_2 = 2;
+  }
+
+  enum Capability {
+    CAPABILITY_UNSPECIFIED = 0;
+    CAPABILITY_ADDITIONAL_ID_1_SUPPORTED = 1;
+    CAPABILITY_ADDITIONAL_ID_2_SUPPORTED = 2;
+  }
+}

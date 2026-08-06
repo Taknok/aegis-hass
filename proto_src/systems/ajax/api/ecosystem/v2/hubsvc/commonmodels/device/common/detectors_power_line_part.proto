@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message DetectorsPowerLinePart {
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.DetectorsPowerLine detectors_power_lines = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.PowerSupply power_supplies = 2;
+
+  message DetectorsPowerLinePartSettings {
+    repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.PowerSupply power_supplies = 1;
+  }
+
+  message DetectorsPowerLine {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.DetectorsType detectors_type = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.PowerLineStatus power_line_status = 2;
+  }
+
+  message PowerSupply {
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.DetectorsType detectors_type = 1;
+    .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.DetectorsPowerLinePart.IsEnabled is_enabled = 2;
+  }
+
+  enum DetectorsType {
+    DETECTORS_TYPE_UNSPECIFIED = 0;
+    DETECTORS_TYPE_COMMON = 1;
+    DETECTORS_TYPE_FIRE = 2;
+    DETECTORS_TYPE_INPUT = 3;
+    DETECTORS_TYPE_CONNECTORS = 4;
+  }
+
+  enum PowerLineStatus {
+    POWER_LINE_STATUS_UNSPECIFIED = 0;
+    POWER_LINE_STATUS_OK = 1;
+    POWER_LINE_STATUS_SHORTED_OUT = 2;
+    POWER_LINE_STATUS_LOW_VOLTAGE = 3;
+    POWER_LINE_STATUS_OVERLOADED = 4;
+    POWER_LINE_STATUS_ENABLED = 5;
+    POWER_LINE_STATUS_DISABLED = 6;
+  }
+
+  enum IsEnabled {
+    IS_ENABLED_UNSPECIFIED = 0;
+    IS_ENABLED_DISABLED = 1;
+    IS_ENABLED_ENABLED = 2;
+  }
+}

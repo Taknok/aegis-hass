@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message ThirdPartyDeviceOfflineTimeoutPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ThirdPartyDeviceOfflineTimeoutPart.OfflineTimeout offline_timeout = 1;
+  repeated .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ThirdPartyDeviceOfflineTimeoutPart.OfflineTimeout available_offline_timeouts = 2;
+
+  message ThirdPartyDeviceOfflineTimeoutPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.ThirdPartyDeviceOfflineTimeoutPart.OfflineTimeout offline_timeout = 1;
+  }
+
+  enum OfflineTimeout {
+    OFFLINE_TIMEOUT_UNSPECIFIED = 0;
+    OFFLINE_TIMEOUT_4_HOURS = 1;
+    OFFLINE_TIMEOUT_8_HOURS = 2;
+    OFFLINE_TIMEOUT_12_HOURS = 3;
+    OFFLINE_TIMEOUT_18_HOURS = 4;
+    OFFLINE_TIMEOUT_24_HOURS = 5;
+  }
+}

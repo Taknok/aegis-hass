@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common;
+
+import "systems/ajax/api/ecosystem/v2/hubsvc/commonmodels/meta/meta.proto";
+
+option java_multiple_files = true;
+option java_package = "systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common";
+option swift_prefix = "";
+
+message JewellerCommunicationPart {
+  .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.JewellerCommunicationPart.CommunicationMethod communication_method = 1;
+
+  message JewellerCommunicationPartSettings {
+    optional .systems.ajax.api.ecosystem.v2.hubsvc.commonmodels.device.common.JewellerCommunicationPart.CommunicationMethod communication_method = 1;
+  }
+
+  enum CommunicationMethod {
+    COMMUNICATION_METHOD_UNSPECIFIED = 0;
+    COMMUNICATION_METHOD_BUILT_IN = 1;
+    COMMUNICATION_METHOD_EXTERNAL = 2;
+    COMMUNICATION_METHOD_AUTO_SWITCH = 3;
+  }
+}
