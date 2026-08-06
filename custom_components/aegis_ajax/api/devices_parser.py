@@ -682,6 +682,33 @@ def parse_device(proto_light_device: Any) -> Device | None:  # noqa: ANN401
     return None
 
 
+def unmodelled_device_case_numbers(hub_device: object) -> list[int]:
+    """Wire field numbers on a `HubDevice` that our `device` oneof omits (#408).
+
+    Our vendored definitions model a subset of the device families the hub
+    actually sends. A case we don't model is not an error: protobuf moves it
+    to the unknown-field set, `WhichOneof("device")` returns `None`, and
+    nothing is logged at any level — so "this family is missing from our
+    definitions" and "this device carries no data" look identical from a log.
+    The field number survives in the unknown-field set and names the case
+    exactly, which is the difference between a silent gap and a one-line fix.
+
+    Takes `object` and never raises: the result feeds a `_LOGGER.debug()`
+    argument list, and those arguments are evaluated eagerly whether or not
+    debug logging is enabled.
+    """
+    try:
+        from google.protobuf.unknown_fields import UnknownFieldSet  # noqa: PLC0415
+
+        # protobuf types `UnknownFieldSet` after its pure-Python implementation,
+        # which declares neither `__iter__` nor an `object` argument; the upb
+        # build Home Assistant runs on provides both.
+        unknown: Any = UnknownFieldSet(hub_device)  # type: ignore[arg-type]
+        return sorted({field.field_number for field in unknown})
+    except (AttributeError, ImportError, KeyError, RuntimeError, TypeError, ValueError):
+        return []
+
+
 def parse_hub_device_temperature(hub_device: Any) -> float | None:  # noqa: ANN401
     """Pull the internal temperature out of a rich `HubDevice` proto (#220).
 

@@ -156,10 +156,11 @@ def _log_empty_siren_settings(hub_device_id: str, hub_device: Any) -> None:  # n
             has_siren_part = None
     _LOGGER.debug(
         "StreamHubDevice (siren settings) for %s carried no settings; "
-        "HubDevice oneof case=%r common_siren_part=%s",
+        "HubDevice oneof case=%r common_siren_part=%s unmodelled_case_numbers=%s",
         hub_device_id,
         case,
         has_siren_part,
+        devices_parser.unmodelled_device_case_numbers(hub_device),
     )
 
 
@@ -330,15 +331,23 @@ class DevicesApi:
                         # `device_temperature`), the value silently vanishes. Log
                         # the actual case so we can extend the proto from a real
                         # device's response (cf. #206).
+                        #
+                        # `case=None` on its own cannot say whether the family is
+                        # missing from our definitions or the device simply sent
+                        # nothing, so report the unknown-field numbers alongside
+                        # it: an unmodelled case leaves its wire number there and
+                        # names itself (#408).
                         case = (
                             hub_device.WhichOneof("device")
                             if hasattr(hub_device, "WhichOneof")
                             else None
                         )
                         _LOGGER.debug(
-                            "StreamHubDevice for %s: no temperature; HubDevice oneof case=%r",
+                            "StreamHubDevice for %s: no temperature; "
+                            "HubDevice oneof case=%r unmodelled_case_numbers=%s",
                             hub_device_id,
                             case,
+                            devices_parser.unmodelled_device_case_numbers(hub_device),
                         )
                     return temperature
             elif msg.HasField("failure"):

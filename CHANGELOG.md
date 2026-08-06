@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Thanks to @Taknok, who owns a Double Deck, found both device-type lists, worked out why there are two, and tested the change on the real siren — the confirmation this needed and that could not be produced without the hardware.
 
 ### Fixed
+- **A device family our copy of the protocol doesn't describe no longer disappears without trace (#408).** When the hub reports a device in a shape we don't model, the data is discarded before the integration ever sees it — silently, at every log level. "This family is missing from our definitions" and "this device reports nothing" therefore produced identical logs, so each affected family had to be diagnosed from scratch by whoever owned the hardware, which is how the same underlying gap came to be fixed four separate times (#229, #339, #354, #383).
+
+  The debug probes on the rich per-device read now report the wire number of the case that was dropped, which identifies the family exactly. Diagnostics only — no entity behaviour changes. Found by @wip3out3r, who measured 8 of his 13 devices reading as empty on that endpoint and named all five missing families.
+
 - **The Bypass switch now explains itself when it cannot put a device back into protection (#338).** Turning the switch *off* never worked, on any install: the command went out carrying a value the Ajax hub rejects outright, and the attempt failed with a raw protocol error that named nothing you could act on. The hub's command vocabulary has no value that clears a deactivation — it can only name which kind to apply — so Home Assistant now says exactly that, in all supported languages, and points you at the Ajax app instead of failing obscurely.
 
   Deactivating a device from Home Assistant is unchanged, and so is what the switch reads: it still shows `on` for a device deactivated by anyone, including from the Ajax app or by an installer. Found by @wip3out3r, who measured the rejected command on his own hub and flagged it as a separate fault from the one #338 is about.
