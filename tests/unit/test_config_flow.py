@@ -543,6 +543,100 @@ class TestAsyncStepReauth:
         assert flow.async_show_form.call_args[1]["errors"]["base"] == "cannot_connect"
 
     @pytest.mark.asyncio
+    async def test_step_reauth_confirm_reuses_the_entry_device_id(self) -> None:
+        """Ajax binds the session token to the `client-device-id` that asked for it.
+
+        Logging in from a throwaway id yields a token that every later call
+        rejects with UNAUTHENTICATED, which puts the entry in a permanent
+        reauth loop.
+        """
+        flow = self._make_flow(
+            {"email": "user@example.com", "app_label": "Ajax", "device_id": "dev-original"}
+        )
+        flow._email = "user@example.com"
+        flow._app_label = "Ajax"
+        flow._async_finish_reauth = AsyncMock(return_value={"type": "abort"})
+
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.login = AsyncMock()
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "custom_components.aegis_ajax.config_flow.AjaxGrpcClient", return_value=mock_client
+        ) as client_cls:
+            await flow.async_step_reauth_confirm({"password": "x"})
+
+        assert client_cls.call_args[1]["device_id"] == "dev-original"
+
+    @pytest.mark.asyncio
+    async def test_finish_reauth_persists_the_device_id(self) -> None:
+        """The stored id must match the token, or the reload fails to authenticate."""
+        flow = self._make_flow({"email": "user@example.com", "app_label": "Ajax"})
+        flow._password_hash = "hash"
+        flow._app_label = "Ajax"
+        flow.async_update_reload_and_abort = MagicMock(return_value={"type": "abort"})
+
+        flow._client = MagicMock()
+        flow._client.session.session_token = "tok-new"
+        flow._client.session.user_hex_id = "hex-1"
+        flow._client.session.device_id = "dev-used"
+
+        flow._capture_session()
+        # `AjaxGrpcClient.close()` wipes the session, and the reauth path
+        # closes before persisting. Reading the token off the client here
+        # used to yield None, leaving the entry on its old, rejected token.
+        flow._client.session.session_token = None
+        flow._client.session.user_hex_id = None
+
+        await flow._async_finish_reauth()
+
+        data = flow.async_update_reload_and_abort.call_args[1]["data"]
+        assert data["session_token"] == "tok-new"
+        assert data["user_hex_id"] == "hex-1"
+        assert data["device_id"] == "dev-used"
+
+    @pytest.mark.asyncio
+    async def test_reauth_2fa_persists_the_token_despite_close_clearing_it(self) -> None:
+        """The channel is closed before persisting, and `close()` wipes the session.
+
+        Reading the token off the client after closing yielded nothing, so the
+        entry silently kept its old token. On reload that token was rejected,
+        the coordinator forced a re-login, and Ajax demanded 2FA again — an
+        unbreakable loop that no amount of reauthenticating could escape.
+        """
+        flow = self._make_flow({"email": "user@example.com", "app_label": "Ajax"})
+        flow._email = "user@example.com"
+        flow._app_label = "Ajax"
+        flow._password_hash = "hash"
+        flow._request_id = "req-1"
+        flow.async_update_reload_and_abort = MagicMock(return_value={"type": "abort"})
+
+        mock_client = MagicMock()
+        mock_client.session.session_token = None
+        mock_client.session.user_hex_id = None
+        mock_client.session.device_id = "dev-used"
+
+        async def _login_totp(**_kwargs: object) -> None:
+            mock_client.session.session_token = "tok-fresh"
+            mock_client.session.user_hex_id = "hex-1"
+
+        async def _close() -> None:
+            mock_client.session.session_token = None
+            mock_client.session.user_hex_id = None
+
+        mock_client.login_totp = AsyncMock(side_effect=_login_totp)
+        mock_client.close = AsyncMock(side_effect=_close)
+        flow._client = mock_client
+
+        await flow.async_step_reauth_2fa({"totp_code": "123456"})
+
+        data = flow.async_update_reload_and_abort.call_args[1]["data"]
+        assert data["session_token"] == "tok-fresh"
+        assert data["user_hex_id"] == "hex-1"
+        assert data["device_id"] == "dev-used"
+
+    @pytest.mark.asyncio
     async def test_step_reauth_confirm_2fa_required_forwards(self) -> None:
         flow = self._make_flow()
         flow._email = "user@example.com"
@@ -669,6 +763,52 @@ class TestAsyncFinishReconfigure:
         assert kwargs["data"]["email"] == "new@example.com"
         assert kwargs["title"] == "Ajax Security (new@example.com)"
         assert kwargs["unique_id"] == "new@example.com"
+
+    @pytest.mark.asyncio
+    async def test_finish_reconfigure_persists_the_device_id(self) -> None:
+        """Same binding as reauth: a stored id that mismatches the token is fatal."""
+        flow, _ = self._make_flow()
+        flow._email = "new@example.com"
+        flow._app_label = "Ajax"
+        flow._password_hash = hashlib.sha256(b"pw").hexdigest()
+        mock_client = MagicMock()
+        mock_client.session.session_token = "tok"
+        mock_client.session.user_hex_id = "hex"
+        mock_client.session.device_id = "dev-used"
+        flow._client = mock_client
+
+        flow._capture_session()
+        # The reconfigure path closes the channel before persisting, and
+        # `close()` clears the session.
+        mock_client.session.session_token = None
+
+        await flow._async_finish_reconfigure()
+
+        kwargs = flow.async_update_reload_and_abort.call_args.kwargs
+        assert kwargs["data"]["session_token"] == "tok"
+        assert kwargs["data"]["device_id"] == "dev-used"
+
+    @pytest.mark.asyncio
+    async def test_step_reconfigure_reuses_the_entry_device_id(self) -> None:
+        flow, entry = self._make_flow()
+        entry.data = {
+            "email": "old@example.com",
+            "app_label": "Ajax",
+            "device_id": "dev-original",
+        }
+        flow._async_finish_reconfigure = AsyncMock(return_value={"type": "abort"})
+
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.login = AsyncMock()
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "custom_components.aegis_ajax.config_flow.AjaxGrpcClient", return_value=mock_client
+        ) as client_cls:
+            await flow.async_step_reconfigure({"email": "old@example.com", "password": "pw"})
+
+        assert client_cls.call_args[1]["device_id"] == "dev-original"
 
 
 class TestOptionsFlow:

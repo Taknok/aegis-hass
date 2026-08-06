@@ -61,7 +61,9 @@ try:
 except TypeError as exc:
     _log_proto_descriptor_collision(exc)
     raise
+from custom_components.aegis_ajax.api.session import log_fingerprint  # noqa: E402
 from custom_components.aegis_ajax.const import (  # noqa: E402
+    APPLICATION_LABEL,
     CONF_AUTO_CREATE_LABELS,
     CONF_DISABLE_PUSH_WARNING,
     CONF_PERSISTENT_NOTIFICATION_EVENTS,
@@ -314,7 +316,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
             email=entry.data["email"],
             password_hash=entry.data["password_hash"],
             device_id=entry.data.get("device_id"),
-            app_label=entry.data.get("app_label", ""),
+            app_label=entry.data.get("app_label", APPLICATION_LABEL),
         )
     else:
         _LOGGER.warning(
@@ -325,14 +327,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
             email=entry.data["email"],
             password=entry.data.get("password", ""),
             device_id=entry.data.get("device_id"),
-            app_label=entry.data.get("app_label", ""),
+            app_label=entry.data.get("app_label", APPLICATION_LABEL),
         )
     # Restore session token from stored data to skip re-login (and 2FA) on restart
     if entry.data.get("session_token") and entry.data.get("user_hex_id"):
         _LOGGER.debug(
-            "Restoring stored Ajax session for entry %s (user=%s)",
+            # Ajax binds the session token to the device id, so a restored token
+            # paired with a different id is rejected with UNAUTHENTICATED and the
+            # mismatch is otherwise invisible. Both go through `log_fingerprint`:
+            # they are in `diagnostics.TO_REDACT`, and telling two ids apart is
+            # all a log needs from them. The app label is a brand string, not an
+            # identifier, so it is logged as-is.
+            "Restoring stored Ajax session for entry %s "
+            "(user=%s, device_id=%s, app_label=%r, token=%s)",
             entry.entry_id,
             entry.data["user_hex_id"],
+            log_fingerprint(client.session.device_id),
+            client.session.app_label,
+            log_fingerprint(entry.data["session_token"]),
         )
         client.session.set_session(str(entry.data["session_token"]), str(entry.data["user_hex_id"]))
     else:
@@ -348,15 +360,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
         Called by the coordinator after every successful login so that a
         restart can reuse the freshest token instead of forcing another
         login (which would create yet another active session in Ajax).
+
+        The device id rides along because Ajax binds the token to it. Entries
+        created before the id was stored get one generated per setup, so
+        without persisting it here the very next restart presents the token
+        under a different id and Ajax rejects it.
         """
+        device_id = client.session.device_id
         if (
             entry.data.get("session_token") == token
             and entry.data.get("user_hex_id") == user_hex_id
+            and entry.data.get("device_id") == device_id
         ):
             return
-        new_data = {**entry.data, "session_token": token, "user_hex_id": user_hex_id}
+        new_data = {
+            **entry.data,
+            "session_token": token,
+            "user_hex_id": user_hex_id,
+            "device_id": device_id,
+        }
         hass.config_entries.async_update_entry(entry, data=new_data)
-        _LOGGER.debug("Persisted refreshed Ajax session for entry %s", entry.entry_id)
+        _LOGGER.debug(
+            "Persisted refreshed Ajax session for entry %s (device_id=%s, token=%s)",
+            entry.entry_id,
+            log_fingerprint(device_id),
+            log_fingerprint(token),
+        )
 
     coordinator = AjaxCobrandedCoordinator(
         hass=hass,
@@ -427,7 +456,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntry
             fcm_api_key=_get_fcm("fcm_api_key"),
             fcm_sender_id=_get_fcm("fcm_sender_id"),
             entry_id=entry.entry_id,
-            app_label=str(entry.data.get("app_label", "")),
+            app_label=str(entry.data.get("app_label", APPLICATION_LABEL)),
             disable_push_warning=bool(
                 entry.options.get(CONF_DISABLE_PUSH_WARNING, DEFAULT_DISABLE_PUSH_WARNING)
             ),
@@ -626,7 +655,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: AjaxCobrandedConfigEntr
     common_kwargs = {
         "email": entry.data["email"],
         "device_id": entry.data.get("device_id"),
-        "app_label": entry.data.get("app_label", ""),
+        "app_label": entry.data.get("app_label", APPLICATION_LABEL),
     }
     try:
         if entry.data.get("password_hash"):

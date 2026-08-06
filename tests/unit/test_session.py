@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 
-from custom_components.aegis_ajax.api.session import AjaxSession
+from custom_components.aegis_ajax.api.session import AjaxSession, log_fingerprint
 from custom_components.aegis_ajax.const import CLIENT_DEVICE_MODEL, CLIENT_VERSION
 
 
@@ -126,3 +126,51 @@ class TestAuthState:
         session._session_token = "token"
         session._user_hex_id = "user"
         assert session.is_authenticated is True
+
+
+class TestLogFingerprint:
+    """`log_fingerprint` replaces logging `session_token` / `device_id` values.
+
+    Both keys are in `diagnostics.TO_REDACT`, so neither belongs in a log line
+    either — debug logs get pasted into public issues, while a diagnostics dump
+    is a file someone downloads.
+    """
+
+    def test_does_not_carry_the_value(self) -> None:
+        # The whole point: the output must not contain the secret, in whole or
+        # in the leading fragment a truncated log would previously have shown.
+        token = "aegis-session-token-abcdef123456"
+        out = log_fingerprint(token)
+        assert token not in out
+        assert token[:8] not in out
+
+    def test_is_stable_for_the_same_value(self) -> None:
+        # A log is only useful for "is this the same one as before?", which
+        # requires the digest to be reproducible across calls and processes.
+        assert log_fingerprint("tok-a") == log_fingerprint("tok-a")
+
+    def test_distinguishes_different_values(self) -> None:
+        assert log_fingerprint("tok-a") != log_fingerprint("tok-b")
+
+    def test_empty_and_none_report_absence_rather_than_a_digest(self) -> None:
+        # A missing token is the interesting case in the reauth path, so it must
+        # read as absent instead of hashing to a plausible-looking id.
+        assert log_fingerprint(None) == "none"
+        assert log_fingerprint("") == "none"
+
+    def test_a_non_string_cannot_raise(self) -> None:
+        """Every call sits inside a `_LOGGER.debug(...)` argument list.
+
+        Python evaluates those eagerly, so a `TypeError` in here would not spoil
+        a log line — it would take down the login path being logged. Caught for
+        real: the first version called `.encode()` directly and a non-`str`
+        raised `TypeError: object supporting the buffer API required`, failing
+        seven tests through the coordinator's login path.
+        """
+
+        class Odd:
+            def __str__(self) -> str:
+                return "odd-value"
+
+        assert log_fingerprint(Odd()) == log_fingerprint("odd-value")
+        assert log_fingerprint(12345) == log_fingerprint("12345")

@@ -34,7 +34,11 @@ from custom_components.aegis_ajax.api.models import (
     is_device_deactivated,
 )
 from custom_components.aegis_ajax.api.security import SecurityApi
-from custom_components.aegis_ajax.api.session import AuthenticationError, TwoFactorRequiredError
+from custom_components.aegis_ajax.api.session import (
+    AuthenticationError,
+    TwoFactorRequiredError,
+    log_fingerprint,
+)
 from custom_components.aegis_ajax.api.spaces import SpacesApi
 from custom_components.aegis_ajax.const import (
     BUTTON_PRESS_DEVICE_TYPES,
@@ -545,7 +549,11 @@ class AjaxCobrandedCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         the only copy and a restart re-logins (creating yet another
         active session in Ajax) instead of reusing the latest one.
         """
-        _LOGGER.debug("Logging in to Ajax (fresh session)")
+        _LOGGER.debug(
+            "Logging in to Ajax (fresh session, device_id=%s, app_label=%r)",
+            log_fingerprint(self._client.session.device_id),
+            self._client.session.app_label,
+        )
         await self._client.login()
         token = self._client.session.session_token
         user_hex_id = self._client.session.user_hex_id
